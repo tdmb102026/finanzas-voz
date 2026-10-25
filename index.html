@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f172a">
+  <title>Finanzas</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main>
+    <!-- Anotar: la pantalla de los 3 segundos -->
+    <section id="vista-anotar" class="vista activa">
+      <div class="tipo" role="radiogroup" aria-label="Tipo">
+        <button type="button" class="tipo-btn activo" data-tipo="gasto" role="radio" aria-checked="true">Gasto</button>
+        <button type="button" class="tipo-btn" data-tipo="ingreso" role="radio" aria-checked="false">Ingreso</button>
+      </div>
+
+      <output id="monto" class="monto" aria-live="polite">$0</output>
+      <p id="ayuda" class="ayuda">Escribe el monto y toca una categoría</p>
+
+      <div id="categorias" class="categorias"></div>
+
+      <div class="teclado" id="teclado">
+        <button type="button" data-k="1">1</button>
+        <button type="button" data-k="2">2</button>
+        <button type="button" data-k="3">3</button>
+        <button type="button" data-k="4">4</button>
+        <button type="button" data-k="5">5</button>
+        <button type="button" data-k="6">6</button>
+        <button type="button" data-k="7">7</button>
+        <button type="button" data-k="8">8</button>
+        <button type="button" data-k="9">9</button>
+        <button type="button" data-k=".">.</button>
+        <button type="button" data-k="0">0</button>
+        <button type="button" data-k="borrar" aria-label="Borrar">⌫</button>
+      </div>
+    </section>
+
+    <!-- Movimientos del mes -->
+    <section id="vista-movimientos" class="vista">
+      <header class="mes">
+        <button type="button" id="mes-anterior" aria-label="Mes anterior">‹</button>
+        <h1 id="mes-nombre"></h1>
+        <button type="button" id="mes-siguiente" aria-label="Mes siguiente">›</button>
+      </header>
+      <div class="totales">
+        <div><span>Ingresos</span><strong id="total-ingresos">$0.00</strong></div>
+        <div><span>Gastos</span><strong id="total-gastos">$0.00</strong></div>
+        <div><span>Saldo</span><strong id="total-saldo">$0.00</strong></div>
+      </div>
+      <ul id="lista" class="lista"></ul>
+      <p id="vacio" class="vacio">Sin movimientos este mes.</p>
+      <p id="rapidez" class="rapidez"></p>
+    </section>
+  </main>
+
+  <nav class="nav">
+    <button type="button" class="nav-btn activo" data-vista="anotar">Anotar</button>
+    <button type="button" class="nav-btn" data-vista="movimientos">Movimientos</button>
+  </nav>
+
+  <div id="aviso" class="aviso" role="status" hidden>
+    <span id="aviso-texto"></span>
+    <button type="button" id="deshacer">Deshacer</button>
+  </div>
+
+  <dialog id="editor">
+    <form method="dialog" id="editor-form">
+      <h2>Editar movimiento</h2>
+      <label>Tipo
+        <select name="tipo">
+          <option value="gasto">Gasto</option>
+          <option value="ingreso">Ingreso</option>
+        </select>
+      </label>
+      <label>Monto ($)
+        <input name="monto" inputmode="decimal" autocomplete="off" required>
+      </label>
+      <label>Categoría
+        <select name="categoria"></select>
+      </label>
+      <label>Fecha
+        <input name="fecha" type="datetime-local" required>
+      </label>
+      <label>Nota
+        <input name="nota" autocomplete="off">
+      </label>
+      <div class="editor-botones">
+        <button type="button" id="editor-borrar" class="peligro">Borrar</button>
+        <button value="cancelar" formnovalidate>Cancelar</button>
+        <button value="guardar" class="principal">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="db.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
