@@ -10,7 +10,6 @@ const TIPOS = {
   ingreso: { texto: 'ingreso', excel: 'Ingreso', grupo: 'Ingreso' },
   inversion: { texto: 'inversión', excel: 'Inversión', grupo: 'Inversión' },
 };
-const COLORES = ['#2563eb', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16'];
 
 const $ = id => document.getElementById(id);
 const estado = {
@@ -280,7 +279,8 @@ function bloqueTipo(titulo, cats, tipo) {
 
 async function pintarResumen() {
   pintarMes();
-  const movs = await DB.entre(...rangoMes(estado.mes));
+  const m = estado.mes;
+  const movs = await DB.entre(...rangoMes(m));
   const g = agrupar(movs);
   const suma = (cats, campo) => cats.reduce((s, c) => s + c[campo], 0);
   const ing = { real: suma(g.ingreso, 'real'), ppto: suma(g.ingreso, 'ppto') };
@@ -289,14 +289,53 @@ async function pintarResumen() {
   const libre = ing.real - egr.real - inv.real;
   const pctInvertido = ing.real ? Math.round(inv.real / ing.real * 100) : 0;
 
-  // Distribución de egresos por categoría (la dona del Excel), como una barra.
-  const conGasto = g.gasto.filter(c => c.real > 0);
-  const distribucion = egr.real ? `
-    <h2 class="seccion">Distribución de gastos</h2>
-    <div class="dist">${conGasto.map((c, i) =>
-      `<div style="width:${(c.real / egr.real * 100).toFixed(1)}%;background:${COLORES[i % COLORES.length]}"></div>`).join('')}</div>
-    <ul class="leyenda">${conGasto.map((c, i) =>
-      `<li><i style="background:${COLORES[i % COLORES.length]}"></i>${escapar(c.nombre)} <strong>${Math.round(c.real / egr.real * 100)}%</strong></li>`).join('')}</ul>` : '';
+  // 1. ¿A dónde se fue el ingreso? Gastos, inversión y lo que queda libre.
+  const reparto = Graficos.dona([
+    { nombre: 'Gastos', valor: egr.real, color: 'var(--c-gasto)' },
+    { nombre: 'Inversión', valor: inv.real, color: 'var(--c-inversion)' },
+    { nombre: 'Libre', valor: Math.max(libre, 0), color: 'var(--c-libre)' },
+  ].filter(p => p.valor > 0), { titulo: libre < 0 ? 'Te faltan' : 'Libre', valor: dinero(Math.abs(libre)) });
+
+  // 2. Curva de gastos acumulados día a día contra el ritmo del presupuesto.
+  const totalDias = new Date(m.getFullYear(), m.getMonth() + 1, 0).getDate();
+  const hoy = new Date();
+  const esEsteMes = hoy.getFullYear() === m.getFullYear() && hoy.getMonth() === m.getMonth();
+  const hasta = esEsteMes ? hoy.getDate() : totalDias;
+  const porDia = Array(totalDias + 1).fill(0);
+  for (const x of movs) if (x.tipo === 'gasto') porDia[Number(x.fecha.slice(8, 10))] += x.monto;
+  const dias = [];
+  for (let d = 1, acc = 0; d <= hasta; d++) { acc += porDia[d]; dias.push({ dia: d, acumulado: acc }); }
+  const curva = egr.real || egr.ppto ? Graficos.curva(dias, egr.ppto, totalDias, 'var(--c-gasto)') : '';
+  const ritmo = egr.ppto ? Math.round(egr.ppto * hasta / totalDias) : 0;
+  const frase = !egr.ppto ? '' : egr.real > ritmo
+    ? `Vas ${dinero(egr.real - ritmo)} por encima del ritmo del presupuesto.`
+    : `Vas ${dinero(ritmo - egr.real)} por debajo del ritmo del presupuesto.`;
+
+  // 3. Gastos por concepto: los 5 mayores y el resto junto en "Otros".
+  const conceptosGasto = g.gasto.flatMap(c => c.conceptos).filter(f => f.real > 0).sort((a, b) => b.real - a.real);
+  const top = conceptosGasto.slice(0, 5).map((f, i) => ({ nombre: f.c.nombre, valor: f.real, color: `var(--c${i + 1})` }));
+  const resto = conceptosGasto.slice(5).reduce((s, f) => s + f.real, 0);
+  if (resto) top.push({ nombre: 'Otros', valor: resto, color: 'var(--c-otros)' });
+  const donaGastos = Graficos.dona(top, { titulo: 'Gastos', valor: dinero(egr.real) });
+
+  // 4. Últimos 6 meses: ingresos, gastos e inversión.
+  const inicio = new Date(m.getFullYear(), m.getMonth() - 5, 1);
+  const seis = await DB.entre(fechaLocal(inicio), rangoMes(m)[1]);
+  const meses = Array.from({ length: 6 }, (_, k) => {
+    const f = new Date(inicio.getFullYear(), inicio.getMonth() + k, 1);
+    const clave = fechaLocal(f).slice(0, 7);
+    const delMes = seis.filter(x => x.fecha.startsWith(clave));
+    const t = tipo => delMes.filter(x => x.tipo === tipo).reduce((s, x) => s + x.monto, 0);
+    return { nombre: MESES[f.getMonth()].slice(0, 3), valores: [t('ingreso'), t('gasto'), t('inversion')] };
+  });
+  const historial = meses.some(x => x.valores.some(v => v)) ? Graficos.barras(meses, [
+    { nombre: 'Ingresos', color: 'var(--c-ingreso)' },
+    { nombre: 'Gastos', color: 'var(--c-gasto)' },
+    { nombre: 'Inversión', color: 'var(--c-inversion)' },
+  ]) : '';
+
+  const tarjeta = (titulo, cuerpo, pie = '') => cuerpo
+    ? `<section class="tarjeta"><h2>${titulo}</h2>${cuerpo}${pie ? `<p class="nota">${pie}</p>` : ''}</section>` : '';
 
   $('resumen').innerHTML = `
     <div class="totales">
@@ -305,17 +344,69 @@ async function pintarResumen() {
       <div><span>Inversión</span><strong class="inversion">${dinero(inv.real)}</strong><small>Ppto ${dinero(inv.ppto)}</small></div>
       <div><span>Libre</span><strong class="${libre < 0 ? 'gasto' : ''}">${dinero(libre)}</strong><small>Ppto ${dinero(ing.ppto - egr.ppto - inv.ppto)}</small></div>
     </div>
-    <p class="nota centro">Ingresos − Gastos − Inversión = Libre. Inviertes el ${pctInvertido}% de lo que ganas.</p>
+    ${tarjeta('¿A dónde se fue tu ingreso?', reparto, `Inviertes el ${pctInvertido}% de lo que ganas. Toca la dona para ver cada parte.`)}
+    ${tarjeta('Gastos del mes, día a día', curva, `${frase} La línea punteada es el presupuesto repartido parejo en el mes.`)}
+    ${tarjeta('¿En qué gastas más?', donaGastos)}
+    ${tarjeta('Últimos 6 meses', historial, 'Toca un mes para ver los montos.')}
     <p class="nota centro">Gastos: ${diferencia(egr.real, egr.ppto, 'gasto')}. Inversión: ${diferencia(inv.real, inv.ppto, 'inversion')}. Ingresos: ${diferencia(ing.real, ing.ppto, 'ingreso')}.</p>
     ${bloqueTipo('Gastos por categoría', g.gasto, 'gasto')}
-    ${distribucion}
     ${bloqueTipo('Inversión por categoría', g.inversion, 'inversion')}
     ${bloqueTipo('Ingresos por categoría', g.ingreso, 'ingreso')}`;
+  Graficos.activar($('resumen'));
 }
 
-// ---------- Ajustes ----------
+// ---------- Proyección ----------
+
+// Presupuesto del mes (lo que esperas) y cierre estimado al ritmo de gasto actual.
+async function pintarProyeccion() {
+  const hoy = new Date();
+  const totalDias = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate();
+  const ppto = tipo => estado.conceptos.filter(c => c.tipo === tipo).reduce((s, c) => s + (c.presupuesto || 0), 0);
+  const p = { ingreso: ppto('ingreso'), gasto: ppto('gasto'), inversion: ppto('inversion') };
+  const libreP = p.ingreso - p.gasto - p.inversion;
+
+  const movs = await DB.entre(...rangoMes(hoy));
+  const real = tipo => movs.filter(x => x.tipo === tipo).reduce((s, x) => s + x.monto, 0);
+  const r = { ingreso: real('ingreso'), gasto: real('gasto'), inversion: real('inversion') };
+  const gastoCierre = Math.round(r.gasto / hoy.getDate() * totalDias);
+  const ingresoCierre = Math.max(r.ingreso, p.ingreso);
+  const inversionCierre = Math.max(r.inversion, p.inversion);
+  const libreCierre = ingresoCierre - gastoCierre - inversionCierre;
+
+  const reparto = Graficos.dona([
+    { nombre: 'Gastos', valor: p.gasto, color: 'var(--c-gasto)' },
+    { nombre: 'Inversión', valor: p.inversion, color: 'var(--c-inversion)' },
+    { nombre: 'Libre', valor: Math.max(libreP, 0), color: 'var(--c-libre)' },
+  ].filter(x => x.valor > 0), { titulo: libreP < 0 ? 'Faltarían' : 'Libre', valor: dinero(Math.abs(libreP)) });
+
+  const fila = (nombre, valor, clase = '') =>
+    `<div class="fila linea"><span>${nombre}</span><strong class="${clase}">${valor}</strong></div>`;
+  $('proyeccion').innerHTML = `
+    <h1 class="titulo">Proyección de ${MESES[hoy.getMonth()]}</h1>
+    <section class="tarjeta">
+      <h2>Lo que esperas en el mes</h2>
+      ${reparto}
+      <p class="nota">Ingresos esperados ${dinero(p.ingreso)}. Sale de los presupuestos de abajo: cámbialos y la proyección se actualiza.</p>
+    </section>
+    <section class="tarjeta">
+      <h2>Si sigues a este ritmo</h2>
+      ${fila(`Gastos al cierre (llevas ${dinero(r.gasto)} en ${hoy.getDate()} días)`, dinero(gastoCierre), gastoCierre > p.gasto ? 'critico' : 'gasto')}
+      ${fila('Gastos presupuestados', dinero(p.gasto))}
+      ${fila('Ingresos del mes', dinero(ingresoCierre), 'ingreso')}
+      ${fila('Inversión del mes', dinero(inversionCierre), 'inversion')}
+      ${fila('Libre al cierre', dinero(libreCierre), libreCierre < 0 ? 'critico' : '')}
+      <p class="nota">${p.gasto && gastoCierre > p.gasto
+        ? `A este ritmo te pasarías ${dinero(gastoCierre - p.gasto)} del presupuesto de gastos. Para no pasarte, puedes gastar ${dinero(Math.round(Math.max(p.gasto - r.gasto, 0) / Math.max(totalDias - hoy.getDate(), 1)))} por día lo que queda del mes.`
+        : p.gasto ? `En gastos vas bien: puedes gastar hasta ${dinero(Math.round((p.gasto - r.gasto) / Math.max(totalDias - hoy.getDate(), 1)))} por día lo que queda del mes.`
+        : 'Pon presupuesto a tus conceptos de gasto para ver cuánto puedes gastar por día.'}
+        Ingresos e inversión cuentan lo presupuestado o lo ya anotado, lo que sea mayor.</p>
+      ${libreP < 0 ? `<p class="nota critico">Tus presupuestos de gastos e inversión suman ${dinero(-libreP)} más que tus ingresos esperados. Baja alguno abajo para que el mes cuadre.</p>` : ''}
+    </section>`;
+  Graficos.activar($('proyeccion'));
+}
 
 function pintarAjustes() {
+  pintarProyeccion();
   const grupos = new Map();
   for (const c of estado.conceptos) {
     const clave = `${TIPOS[c.tipo].grupo} · ${c.categoria}`;
