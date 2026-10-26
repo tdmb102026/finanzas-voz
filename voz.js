@@ -283,7 +283,7 @@ const Voz = (() => {
     procesando = true;
     try {
       // "enviando" de hace rato: la app se cerró antes de que respondiera la IA.
-      const colgada = m => m.ia === 'enviando' && Date.now() - Date.parse(m.creado) > 120000;
+      const colgada = m => m.ia === 'enviando' && Date.now() - Date.parse(m.creado) > 60000;
       const faltan = (await DB.todos()).filter(m => m.estado === 'pendiente' && (m.ia === 'falta' || colgada(m)) && m.frase);
       for (const m of faltan) {
         const r = await clasificar(m);
@@ -297,6 +297,7 @@ const Voz = (() => {
 
   // Por qué un movimiento sigue pendiente, en palabras.
   function motivo(m) {
+    if (m.ia === 'enviando' && Date.now() - Date.parse(m.creado) < 60000) return 'La IA lo está ordenando…';
     if (m.ia === 'falta' || m.ia === 'enviando') return configurada() ? 'Se ordena solo la próxima vez que abras la app' : 'Configura la voz para ordenarlo';
     if (m.ia === 'error') return 'La IA dio un error: corrígelo a mano';
     return 'La IA no estaba segura: toca para revisar';
@@ -316,6 +317,7 @@ const Voz = (() => {
   $('escucha').addEventListener('close', parar);
   $('voz-form').addEventListener('submit', guardarAjustes);
   window.addEventListener('online', procesarPendientes);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) procesarPendientes(); });
 
   // Respuestas de la app Android: lo que se dijo, o que el teléfono no tiene reconocimiento de voz.
   // El widget usa una pantalla invisible: al terminar, se le pasa el aviso para que lo muestre y se cierre.

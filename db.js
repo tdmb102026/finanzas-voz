@@ -117,5 +117,6 @@ const DB = (() => {
     todos: () => operar('movimientos', 'readonly', t => t.getAll()),
     conceptos: () => operar('conceptos', 'readonly', t => t.getAll()),
     guardarConcepto: c => operar('conceptos', 'readwrite', t => t.put(c)),
+    borrarConcepto: id => operar('conceptos', 'readwrite', t => t.delete(id)),
   };
 })();

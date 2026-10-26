@@ -15,4 +15,5 @@
 - El widget, apenas oye la frase, manda `VozActivity` al fondo (`moveTaskToBack`) para no bloquear la pantalla; el WebView sigue anotando y sale el aviso.
 - Atrás (gesto de Android o botón): la app deja una entrada en el historial mientras haya una ventana abierta o no esté en Anotar; atrás cierra la ventana, luego vuelve a Anotar, y recién ahí sale (`seguirAtras` en app.js).
 - Deslizar una fila de Movimientos a la izquierda la borra, con Deshacer en el aviso.
-- Al revisar una frase, el editor ofrece "+ Crear concepto «X»" con el nombre sacado de la frase (`Voz.nombreSugerido`, hasta 3 palabras); al guardarlo queda elegido en el movimiento. No se crean conceptos solos.
+- Al revisar una frase en la que la IA dudó (sin concepto u "Otros"), el editor ofrece "+ Crear concepto «X»" con el nombre sacado de la frase (`Voz.nombreSugerido`, hasta 3 palabras); al guardarlo queda elegido en el movimiento. No se crean conceptos solos.
+- Mientras haya frases en "enviando" (el widget las ordena por detrás), la app repinta cada 3 s y reenvía las que pasan de 60 s. Un concepto sin movimientos se puede borrar; con movimientos solo ocultar.
