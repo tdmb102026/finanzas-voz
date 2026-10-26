@@ -23,6 +23,16 @@
             <meta-data android:name="android.app.shortcuts" android:resource="@xml/atajos" />
         </activity>
 
+        <!-- Pantalla invisible del widget: escucha, anota y se cierra sin abrir la app. -->
+        <activity
+            android:name=".VozActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:taskAffinity="io.github.tdmb102026.finanzas.voz"
+            android:launchMode="singleTask"
+            android:noHistory="false" />
+
         <receiver
             android:name=".WidgetVoz"
             android:exported="false"

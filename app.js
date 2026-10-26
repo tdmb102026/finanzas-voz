@@ -566,6 +566,8 @@ async function guardarEdicion() {
   if (estado.editando.estado === 'pendiente') {
     const c = estado.conceptos.find(x => x.id === mov.concepto);
     if (c) { c.usos = (c.usos || 0) + 1; await DB.guardarConcepto(c); }
+    // Lo que corriges le sirve de ejemplo a la IA para las próximas frases.
+    if (mov.frase) Voz.aprender(mov.frase, mov);
   }
   return true;
 }
@@ -681,7 +683,8 @@ document.addEventListener('keydown', e => {
   else if (e.key === 'Backspace') teclear('borrar');
 });
 
-(async () => {
+// Arranque: Voz.oido espera a que estén cargados los conceptos.
+const arranque = (async () => {
   await cargarConceptos();
   pintarTipo();
   pintarMonto();

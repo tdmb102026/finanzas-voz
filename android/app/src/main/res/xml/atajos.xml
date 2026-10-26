@@ -7,8 +7,8 @@
         android:shortcutShortLabel="@string/atajo_voz_corto"
         android:shortcutLongLabel="@string/atajo_voz">
         <intent
-            android:action="io.github.tdmb102026.finanzas.VOZ"
+            android:action="android.intent.action.VIEW"
             android:targetPackage="io.github.tdmb102026.finanzas"
-            android:targetClass="io.github.tdmb102026.finanzas.MainActivity" />
+            android:targetClass="io.github.tdmb102026.finanzas.VozActivity" />
     </shortcut>
 </shortcuts>

@@ -21,7 +21,9 @@ La clave nunca llega al celular ni a este repositorio.
 
 ## Usarlo
 
+- **Widget del micrófono (app Android):** escucha y anota sin abrir la app; avisa "Anotado…" y se cierra.
 - En **Anotar**, toca **🎤 Anotar por voz** y habla. Al terminar de hablar se anota solo.
+- Lo que corriges en **Por revisar** se le manda a la IA como ejemplo, así aprende cómo clasificas tus gastos.
 - **Acceso directo:** mantén presionado el ícono de la app en la pantalla principal → **Anotar por voz**.
   (Si no aparece, quita la app de la pantalla principal y vuelve a agregarla desde Chrome.)
 - También puedes escribir la frase o usar el micrófono del teclado.
