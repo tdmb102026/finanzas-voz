@@ -440,15 +440,20 @@ function pintarAjustes() {
       </button></li>`).join('')}</ul>`).join('');
 }
 
-function abrirConcepto(c) {
+function abrirConcepto(c, nuevo = {}) {
   estado.editandoConcepto = c;
   const f = $('concepto-form');
   const categorias = [...new Set(estado.conceptos.map(x => x.categoria))].sort();
   $('lista-categorias').innerHTML = categorias.map(x => `<option value="${escapar(x)}">`).join('');
-  f.nombre.value = c ? c.nombre : '';
+  const tipo = c ? c.tipo : nuevo.tipo || 'gasto';
+  // Categoría propuesta: la más usada de ese tipo ("Otros" si empatan).
+  const cuenta = {};
+  for (const x of estado.conceptos.filter(x => x.tipo === tipo)) cuenta[x.categoria] = (cuenta[x.categoria] || 0) + 1;
+  const comun = Object.keys(cuenta).sort((a, b) => cuenta[b] - cuenta[a] || (b === 'Otros') - (a === 'Otros'))[0] || '';
+  f.nombre.value = c ? c.nombre : nuevo.nombre || '';
   f.icono.value = c ? c.icono : '';
-  f.tipo.value = c ? c.tipo : 'gasto';
-  f.categoria.value = c ? c.categoria : '';
+  f.tipo.value = tipo;
+  f.categoria.value = c ? c.categoria : nuevo.nombre ? comun : '';
   f.presupuesto.value = c ? (c.presupuesto / 100).toFixed(2) : '';
   f.oculto.checked = c ? !!c.oculto : false;
   $('editor-concepto').showModal();
@@ -474,7 +479,7 @@ async function guardarConcepto() {
   };
   await DB.guardarConcepto(c);
   await cargarConceptos();
-  return true;
+  return c;
 }
 
 // ---------- Exportar a Excel ----------
@@ -540,6 +545,11 @@ function abrirEditor(mov) {
   f.nota.value = mov.nota || '';
   $('editor-frase').textContent = mov.frase ? `Dijiste: «${mov.frase}»` : '';
   $('editor-frase').hidden = !mov.frase;
+  // Si la frase nombra algo que no tiene concepto (por ejemplo tu negocio), se ofrece crearlo.
+  const sugerido = mov.frase ? Voz.nombreSugerido(mov.frase) : '';
+  const existe = estado.conceptos.some(c => c.nombre.toLowerCase() === sugerido.toLowerCase());
+  $('editor-nuevo').textContent = `+ Crear concepto «${sugerido}»`;
+  $('editor-nuevo').hidden = !sugerido || existe;
   $('editor-titulo').textContent = mov.estado === 'pendiente' ? 'Revisar y confirmar' : 'Editar movimiento';
   $('editor').showModal();
 }
@@ -566,9 +576,9 @@ async function guardarEdicion() {
   if (estado.editando.estado === 'pendiente') {
     const c = estado.conceptos.find(x => x.id === mov.concepto);
     if (c) { c.usos = (c.usos || 0) + 1; await DB.guardarConcepto(c); }
-    // Lo que corriges le sirve de ejemplo a la IA para las próximas frases.
-    if (mov.frase) Voz.aprender(mov.frase, mov);
   }
+  // Lo que confirmas o corriges le sirve de ejemplo a la IA para las próximas frases.
+  if (mov.frase) Voz.aprender(mov.frase, mov);
   return true;
 }
 
@@ -610,7 +620,7 @@ function seguirAtras() {
 }
 
 addEventListener('popstate', () => {
-  const abierta = document.querySelector('dialog[open]');
+  const abierta = [...document.querySelectorAll('dialog[open]')].pop();
   if (abierta) abierta.close();
   else if (estado.vista !== 'anotar') mostrar('anotar');
   seguirAtras();
@@ -728,12 +738,23 @@ $('ajustes-lista').addEventListener('click', e => {
   if (b) abrirConcepto(concepto(b.dataset.concepto));
 });
 $('nuevo-concepto').addEventListener('click', () => abrirConcepto(null));
+$('editor-nuevo').addEventListener('click', () => abrirConcepto(null, {
+  nombre: Voz.nombreSugerido(estado.editando.frase),
+  tipo: $('editor-form').tipo.value,
+}));
 $('concepto-form').presupuesto.addEventListener('input', e => e.target.setCustomValidity(''));
 $('concepto-form').addEventListener('submit', async e => {
   if (e.submitter && e.submitter.value === 'guardar') {
     e.preventDefault();
-    if (await guardarConcepto()) {
+    const c = await guardarConcepto();
+    if (c) {
       $('editor-concepto').close();
+      // Creado desde "Revisar y confirmar": queda elegido en el movimiento.
+      if ($('editor').open) {
+        $('editor-form').tipo.value = c.tipo;
+        opcionesConcepto(c.tipo, c.id);
+        $('editor-nuevo').hidden = true;
+      }
       repintar();
     }
   }

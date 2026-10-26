@@ -18,7 +18,7 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 
 // Lo que abre el widget: una pantalla invisible que escucha con el micrófono de Google,
-// anota la frase con la app web (sin mostrarla), avisa "Anotado…" y se cierra.
+// anota la frase con la app web (sin mostrarla) en segundo plano, avisa "Anotado…" y se cierra.
 public class VozActivity extends Activity {
     private static final int PEDIR_VOZ = 1;
     private static final long ESPERA_MS = 30000;
@@ -73,6 +73,10 @@ public class VozActivity extends Activity {
         }
         frase = textos.get(0);
         anotarSiListo();
+        // La pantalla invisible se va al fondo para no tapar el celular mientras la IA responde;
+        // el WebView sigue trabajando y el aviso sale igual cuando termina.
+        Toast.makeText(this, "Anotando: «" + frase + "»…", Toast.LENGTH_SHORT).show();
+        moveTaskToBack(true);
         // Si la página o el servidor tardan demasiado, la frase ya quedó guardada como pendiente.
         reloj.postDelayed(() -> terminar("Guardado. Si no se ordenó, está en Movimientos → Por revisar."), ESPERA_MS);
     }
@@ -89,6 +93,13 @@ public class VozActivity extends Activity {
         reloj.removeCallbacksAndMessages(null);
         if (aviso != null) Toast.makeText(this, aviso, Toast.LENGTH_LONG).show();
         finish();
+    }
+
+    // Atrás mientras anota: se va al fondo en vez de cerrarse, para no perder la frase.
+    @Override
+    public void onBackPressed() {
+        if (terminado) super.onBackPressed();
+        else moveTaskToBack(true);
     }
 
     @Override
