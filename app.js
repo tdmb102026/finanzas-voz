@@ -237,15 +237,29 @@ async function pintarMovimientos() {
 
 // ---------- Resumen (el Dashboard del Excel) ----------
 
+// "2026-10" para una fecha.
+function mesDe(d) {
+  return fechaLocal(d).slice(0, 7);
+}
+
+// Presupuesto que tenía el concepto ese mes. El historial guarda desde qué mes rige cada monto,
+// así cambiarlo hoy no altera los meses pasados.
+function presupuestoEn(c, mes) {
+  const h = c.historial || {};
+  const desde = Object.keys(h).filter(k => k <= mes).sort().pop();
+  if (desde) return h[desde];
+  return Object.keys(h).length ? 0 : c.presupuesto || 0;
+}
+
 // Agrupa el mes por tipo → categoría → concepto, con presupuesto y real.
-function agrupar(movs) {
+function agrupar(movs, mes) {
   const real = {};
   for (const x of movs) real[x.concepto] = (real[x.concepto] || 0) + x.monto;
-  const ids = new Set([...estado.conceptos.filter(c => c.presupuesto > 0).map(c => c.id), ...Object.keys(real)]);
+  const ids = new Set([...estado.conceptos.filter(c => presupuestoEn(c, mes) > 0).map(c => c.id), ...Object.keys(real)]);
   const tipos = { ingreso: new Map(), gasto: new Map(), inversion: new Map() };
   for (const id of ids) {
     const c = concepto(id);
-    const fila = { c, ppto: c.presupuesto || 0, real: real[id] || 0 };
+    const fila = { c, ppto: presupuestoEn(c, mes), real: real[id] || 0 };
     const cats = tipos[c.tipo] || tipos.gasto;
     if (!cats.has(c.categoria)) cats.set(c.categoria, { nombre: c.categoria, ppto: 0, real: 0, conceptos: [] });
     const cat = cats.get(c.categoria);
@@ -296,7 +310,7 @@ async function pintarResumen() {
   pintarMes();
   const m = estado.mes;
   const movs = listos(await DB.entre(...rangoMes(m)));
-  const g = agrupar(movs);
+  const g = agrupar(movs, mesDe(m));
   const suma = (cats, campo) => cats.reduce((s, c) => s + c[campo], 0);
   const ing = { real: suma(g.ingreso, 'real'), ppto: suma(g.ingreso, 'ppto') };
   const egr = { real: suma(g.gasto, 'real'), ppto: suma(g.gasto, 'ppto') };
@@ -469,6 +483,14 @@ async function guardarConcepto() {
     return false;
   }
   const previo = estado.editandoConcepto;
+  // El monto nuevo rige desde este mes; los meses pasados guardan el que tenían.
+  const mes = mesDe(new Date());
+  let historial = previo ? { ...(previo.historial || {}) } : {};
+  if (!previo || previo.presupuesto !== ppto) {
+    if (previo && !Object.keys(historial).length) historial['0000-00'] = previo.presupuesto || 0;
+    for (const k of Object.keys(historial)) if (k > mes) delete historial[k];
+    historial[mes] = ppto;
+  }
   const c = {
     ...(previo || { id: nuevoId(), orden: estado.conceptos.length, usos: 0 }),
     nombre: f.nombre.value.trim(),
@@ -476,6 +498,7 @@ async function guardarConcepto() {
     tipo: f.tipo.value,
     categoria: f.categoria.value.trim(),
     presupuesto: ppto,
+    historial,
     oculto: f.oculto.checked,
   };
   await DB.guardarConcepto(c);
@@ -496,8 +519,8 @@ async function exportar() {
   }
   // Como en el Excel: una fila de presupuesto por concepto el día 1 de cada mes, con monto 0.
   for (const m of meses) {
-    for (const c of estado.conceptos.filter(c => c.presupuesto > 0)) {
-      filas.push([m + '-01', c.tipo, c.categoria, c.nombre, c.presupuesto, 0, '']);
+    for (const c of estado.conceptos) {
+      if (presupuestoEn(c, m) > 0) filas.push([m + '-01', c.tipo, c.categoria, c.nombre, presupuestoEn(c, m), 0, '']);
     }
   }
   filas.sort((a, b) => a[0].localeCompare(b[0]));

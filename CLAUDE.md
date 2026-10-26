@@ -18,3 +18,4 @@
 - Al revisar una frase en la que la IA dudó (sin concepto u "Otros"), el editor ofrece "+ Crear concepto «X»" con el nombre sacado de la frase (`Voz.nombreSugerido`, hasta 3 palabras); al guardarlo queda elegido en el movimiento. No se crean conceptos solos.
 - Mientras haya frases en "enviando" (el widget las ordena por detrás), la app repinta cada 3 s y reenvía las que pasan de 60 s. Un concepto sin movimientos se puede borrar; con movimientos solo ocultar.
 - Proyección → "Empezar de cero" borra todos los movimientos (con confirmación y Deshacer); conceptos, presupuestos y `voz-ejemplos` se quedan. Cada mes ya se calcula aparte, desde cero.
+- Presupuesto por mes: cada concepto tiene `historial` {"AAAA-MM": centavos} con el mes desde el que rige cada monto ("0000-00" = lo que tenía antes). Cambiarlo en Proyección rige desde el mes actual; `presupuestoEn(c, mes)` da el de cada mes (Resumen y exportación).
