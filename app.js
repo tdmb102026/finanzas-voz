@@ -501,9 +501,17 @@ async function exportar() {
   ]);
   const encabezado = ['Fecha', 'Mes', 'Tipo', 'Categoria', 'Concepto', 'Presupuesto', 'Monto', 'Nota'];
   const blob = Excel.libro('Movimientos', [encabezado, ...datos]);
+  const nombre = `finanzas-${fechaLocal().slice(0, 10)}.xlsx`;
+  // En la app Android no hay descargas del navegador: el archivo se guarda en Descargas desde Java.
+  if (window.AndroidVoz) {
+    const lector = new FileReader();
+    lector.onload = () => AndroidVoz.guardar(lector.result.split(',')[1], nombre, blob.type);
+    lector.readAsDataURL(blob);
+    return;
+  }
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `finanzas-${fechaLocal().slice(0, 10)}.xlsx`;
+  a.download = nombre;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }

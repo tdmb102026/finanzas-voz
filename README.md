@@ -20,6 +20,19 @@ Funciona como el Excel de fer (registros + dashboard), pero se anota desde el ce
 
 En la computadora: `python3 -m http.server` dentro de la carpeta y abre `http://localhost:8000`.
 
+## App Android (widget del micrófono)
+
+La carpeta `android/` es una app Android pequeña que abre esta misma app por dentro y agrega lo que una app web no puede:
+un **widget de micrófono** para el panel principal, el acceso directo "Anotar por voz" al mantener presionado el ícono,
+el reconocimiento de voz de Google del teléfono y guardar el Excel en Descargas.
+
+GitHub la compila sola (`.github/workflows/apk.yml`) cada vez que cambia `android/` y la deja en
+https://github.com/tdmb102026/finanzas-voz/releases/download/apk/finanzas.apk. Se descarga en el celular, se abre y se instala
+(Android pide permitir "instalar apps de origen desconocido" para Chrome la primera vez). Los cambios de pantallas y lógica
+siguen en los archivos web: la app Android los recibe sola, sin reinstalar.
+
+Los datos se guardan dentro de la app Android, aparte de los de Chrome.
+
 ## Archivos
 
 | Archivo | Qué hace |

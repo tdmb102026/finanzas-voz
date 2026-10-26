@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Finanzas</string>
+    <string name="widget_nombre">Anotar por voz</string>
+    <string name="atajo_voz">Anotar por voz</string>
+    <string name="atajo_voz_corto">Por voz</string>
+</resources>

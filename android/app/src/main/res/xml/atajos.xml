@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="voz"
+        android:enabled="true"
+        android:icon="@drawable/atajo_mic"
+        android:shortcutShortLabel="@string/atajo_voz_corto"
+        android:shortcutLongLabel="@string/atajo_voz">
+        <intent
+            android:action="io.github.tdmb102026.finanzas.VOZ"
+            android:targetPackage="io.github.tdmb102026.finanzas"
+            android:targetClass="io.github.tdmb102026.finanzas.MainActivity" />
+    </shortcut>
+</shortcuts>
