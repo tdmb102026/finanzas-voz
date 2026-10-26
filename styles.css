@@ -85,7 +85,7 @@ body[data-tipo="ingreso"] .monto { color: var(--ingreso); }
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
-  margin-top: auto;
+  margin-top: 12px;
 }
 .cat {
   border: 1px solid var(--borde);
@@ -106,7 +106,7 @@ body[data-tipo="ingreso"] .monto { color: var(--ingreso); }
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
-  margin-top: 12px;
+  margin-top: auto;
 }
 .teclado button {
   border: 0;
