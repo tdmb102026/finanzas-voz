@@ -2,7 +2,10 @@
 // la convierte en movimientos. Sin internet, o si la IA duda, queda en Movimientos → Por revisar.
 // Usa lo de app.js: estado, DB, avisar, concepto, dinero, fechaLocal, aCentavos, nuevoId, repintar.
 const Voz = (() => {
-  const Reconocer = window.SpeechRecognition || window.webkitSpeechRecognition;
+  // Dentro de la app Android (carpeta android/) se usa el reconocimiento de voz de Google del teléfono:
+  // el de la página no funciona ahí.
+  const nativo = window.AndroidVoz;
+  const Reconocer = nativo ? null : window.SpeechRecognition || window.webkitSpeechRecognition;
   const ESPERA_MS = 25000;
   const ERRORES = {
     'contraseña': 'La contraseña de la voz no coincide. Revísala en Proyección → Anotar por voz.',
@@ -71,6 +74,11 @@ const Voz = (() => {
       avisar('Primero configura la voz en Proyección → Anotar por voz.');
       return;
     }
+    if (nativo) { nativo.escuchar(); return; }
+    abrirDialogo();
+  }
+
+  function abrirDialogo() {
     tocada = false;
     $('frase').value = '';
     $('escucha').showModal();
@@ -248,5 +256,9 @@ const Voz = (() => {
   $('voz-form').addEventListener('submit', guardarAjustes);
   window.addEventListener('online', procesarPendientes);
 
-  return { escuchar, procesarPendientes, pintarAjustes, motivo, configurada };
+  // Respuestas de la app Android: lo que se dijo, o que el teléfono no tiene reconocimiento de voz.
+  function oido(texto) { if (texto && texto.trim()) enviar(texto.trim()); }
+  function sinVozNativa() { abrirDialogo(); }
+
+  return { escuchar, oido, sinVozNativa, procesarPendientes, pintarAjustes, motivo, configurada };
 })();
