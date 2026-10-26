@@ -1,7 +1,7 @@
 // Guarda la app en el teléfono para que abra sin internet.
 // Sube VERSION cada vez que cambie algún archivo.
-const VERSION = 'finanzas-v2';
-const ARCHIVOS = ['./', 'index.html', 'styles.css', 'db.js', 'app.js',
+const VERSION = 'finanzas-v3';
+const ARCHIVOS = ['./', 'index.html', 'styles.css', 'db.js', 'excel.js', 'app.js',
   'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {

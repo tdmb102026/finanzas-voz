@@ -1,38 +1,28 @@
-// Fase 1: anotar con teclado, sin IA. Montos siempre en centavos de dólar.
-const CATEGORIAS = {
-  gasto: [
-    { id: 'comida', nombre: 'Comida', icono: '🍽️' },
-    { id: 'transporte', nombre: 'Transporte', icono: '🚌' },
-    { id: 'casa', nombre: 'Casa', icono: '🏠' },
-    { id: 'salud', nombre: 'Salud', icono: '💊' },
-    { id: 'ocio', nombre: 'Ocio', icono: '🎉' },
-    { id: 'otros-gasto', nombre: 'Otros', icono: '📦' },
-  ],
-  ingreso: [
-    { id: 'sueldo', nombre: 'Sueldo', icono: '💼' },
-    { id: 'ventas', nombre: 'Ventas', icono: '🛒' },
-    { id: 'otros-ingreso', nombre: 'Otros', icono: '💰' },
-  ],
-};
-const TODAS = [...CATEGORIAS.gasto, ...CATEGORIAS.ingreso];
+// Anotar con teclado, resumen y presupuesto como el Excel de fer.
+// Montos siempre en centavos de dólar.
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
   'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 const SEGUNDOS_DESHACER = 4;
+const COLORES = ['#2563eb', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16'];
 
 const $ = id => document.getElementById(id);
 const estado = {
   tipo: 'gasto',
   entrada: '',        // lo tecleado, p. ej. "1.5"
   inicio: null,       // cuándo empezó a escribir, para medir los 3 segundos
-  mes: new Date(),    // mes visible en Movimientos
+  mes: new Date(),    // mes visible en Movimientos y Resumen
+  conceptos: [],
   editando: null,
+  editandoConcepto: null,
+  vista: 'anotar',
 };
 
 // ---------- Utilidades ----------
 
-function categoria(id) {
-  return TODAS.find(c => c.id === id) || { id, nombre: id, icono: '•' };
+function concepto(id) {
+  return estado.conceptos.find(c => c.id === id)
+    || { id, nombre: id, icono: '•', categoria: 'Otros', tipo: 'gasto', presupuesto: 0 };
 }
 
 // "1.50", "1,50" o "1.5$" → 150. Devuelve null si no es un monto válido.
@@ -64,6 +54,20 @@ function vibrar(ms) {
   if (navigator.vibrate) navigator.vibrate(ms);
 }
 
+function escapar(t) {
+  return String(t).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
+}
+
+function rangoMes(d) {
+  const desde = new Date(d.getFullYear(), d.getMonth(), 1);
+  const hasta = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+  return [fechaLocal(desde), fechaLocal(hasta)];
+}
+
+async function cargarConceptos() {
+  estado.conceptos = (await DB.conceptos()).sort((a, b) => a.orden - b.orden);
+}
+
 // ---------- Anotar ----------
 
 function pintarTipo() {
@@ -73,8 +77,12 @@ function pintarTipo() {
     b.setAttribute('aria-checked', activo);
   });
   document.body.dataset.tipo = estado.tipo;
-  $('categorias').innerHTML = CATEGORIAS[estado.tipo].map(c =>
-    `<button type="button" class="cat" data-cat="${c.id}"><span>${c.icono}</span>${c.nombre}</button>`
+  // Los más usados primero, para que queden siempre a la vista.
+  const lista = estado.conceptos
+    .filter(c => c.tipo === estado.tipo && !c.oculto)
+    .sort((a, b) => (b.usos - a.usos) || (a.orden - b.orden));
+  $('conceptos').innerHTML = lista.map(c =>
+    `<button type="button" class="cat" data-concepto="${escapar(c.id)}"><span>${escapar(c.icono)}</span>${escapar(c.nombre)}</button>`
   ).join('');
 }
 
@@ -101,7 +109,7 @@ function teclear(k) {
   $('ayuda').classList.remove('alerta');
 }
 
-async function anotar(catId) {
+async function anotar(conceptoId) {
   const centavos = aCentavos(estado.entrada);
   if (!centavos) {
     $('ayuda').textContent = 'Primero escribe el monto';
@@ -109,12 +117,13 @@ async function anotar(catId) {
     vibrar([40, 40, 40]);
     return;
   }
+  const c = concepto(conceptoId);
   const mov = {
     id: nuevoId(),
-    tipo: estado.tipo,
+    tipo: c.tipo,
     monto: centavos,
     moneda: 'USD',
-    categoria: catId,
+    concepto: c.id,
     fecha: fechaLocal(),
     nota: '',
     frase: '',
@@ -124,15 +133,19 @@ async function anotar(catId) {
   };
   mov.editado = mov.creado;
   await DB.guardar(mov);
+  c.usos = (c.usos || 0) + 1;
+  await DB.guardarConcepto(c);
   vibrar(30);
-  avisar(`Anotado: ${mov.tipo} ${dinero(mov.monto)}, ${categoria(catId).nombre.toLowerCase()}`,
-    () => DB.borrar(mov.id));
+  avisar(`Anotado: ${mov.tipo} ${dinero(mov.monto)}, ${c.nombre.toLowerCase()}`, async () => {
+    await DB.borrar(mov.id);
+    c.usos = Math.max(0, c.usos - 1);
+    await DB.guardarConcepto(c);
+  });
 
   estado.entrada = '';
   estado.inicio = null;
   estado.tipo = 'gasto'; // gasto por defecto en cada registro
-  $('ayuda').textContent = 'Escribe el monto y luego toca la categoría';
-  pintarTipo();
+  $('ayuda').textContent = 'Escribe el monto y luego toca el concepto';
   pintarMonto();
 }
 
@@ -155,28 +168,20 @@ async function deshacer() {
   accionDeshacer = null;
   $('aviso').hidden = true;
   if (accion) await accion();
-  if (estado.vista === 'movimientos') pintarMovimientos();
+  repintar();
 }
 
 // ---------- Movimientos ----------
 
-function rangoMes(d) {
-  const desde = new Date(d.getFullYear(), d.getMonth(), 1);
-  const hasta = new Date(d.getFullYear(), d.getMonth() + 1, 1);
-  return [fechaLocal(desde), fechaLocal(hasta)];
+function pintarMes() {
+  const m = estado.mes;
+  document.querySelectorAll('.mes-nombre').forEach(h =>
+    h.textContent = `${MESES[m.getMonth()]} ${m.getFullYear()}`);
 }
 
 async function pintarMovimientos() {
-  const m = estado.mes;
-  $('mes-nombre').textContent = `${MESES[m.getMonth()]} ${m.getFullYear()}`;
-  const movs = (await DB.entre(...rangoMes(m))).sort((a, b) => b.fecha.localeCompare(a.fecha));
-
-  const suma = tipo => movs.filter(x => x.tipo === tipo).reduce((s, x) => s + x.monto, 0);
-  const ingresos = suma('ingreso'), gastos = suma('gasto');
-  $('total-ingresos').textContent = dinero(ingresos);
-  $('total-gastos').textContent = dinero(gastos);
-  $('total-saldo').textContent = dinero(ingresos - gastos);
-  $('total-saldo').classList.toggle('negativo', ingresos < gastos);
+  pintarMes();
+  const movs = (await DB.entre(...rangoMes(estado.mes))).sort((a, b) => b.fecha.localeCompare(a.fecha));
 
   let dia = '', html = '';
   for (const x of movs) {
@@ -186,11 +191,11 @@ async function pintarMovimientos() {
       const f = new Date(d + 'T12:00:00');
       html += `<li class="dia">${DIAS[f.getDay()]} ${f.getDate()}</li>`;
     }
-    const c = categoria(x.categoria);
+    const c = concepto(x.concepto);
     const signo = x.tipo === 'gasto' ? -1 : 1;
     html += `<li><button type="button" class="mov ${x.tipo}" data-id="${x.id}">
-      <span class="mov-icono">${c.icono}</span>
-      <span class="mov-texto"><strong>${c.nombre}</strong>${x.nota ? `<small>${escapar(x.nota)}</small>` : ''}</span>
+      <span class="mov-icono">${escapar(c.icono)}</span>
+      <span class="mov-texto"><strong>${escapar(c.nombre)}</strong><small>${escapar(c.categoria)}${x.nota ? ' · ' + escapar(x.nota) : ''}</small></span>
       <span class="mov-monto">${dinero(signo * x.monto)}<small>${x.fecha.slice(11, 16)}</small></span>
     </button></li>`;
   }
@@ -210,24 +215,198 @@ async function pintarMovimientos() {
   }
 }
 
-function escapar(t) {
-  return t.replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
+// ---------- Resumen (el Dashboard del Excel) ----------
+
+// Agrupa el mes por tipo → categoría → concepto, con presupuesto y real.
+function agrupar(movs) {
+  const real = {};
+  for (const x of movs) real[x.concepto] = (real[x.concepto] || 0) + x.monto;
+  const ids = new Set([...estado.conceptos.filter(c => c.presupuesto > 0).map(c => c.id), ...Object.keys(real)]);
+  const tipos = { ingreso: new Map(), gasto: new Map() };
+  for (const id of ids) {
+    const c = concepto(id);
+    const fila = { c, ppto: c.presupuesto || 0, real: real[id] || 0 };
+    const cats = tipos[c.tipo];
+    if (!cats.has(c.categoria)) cats.set(c.categoria, { nombre: c.categoria, ppto: 0, real: 0, conceptos: [] });
+    const cat = cats.get(c.categoria);
+    cat.ppto += fila.ppto;
+    cat.real += fila.real;
+    cat.conceptos.push(fila);
+  }
+  const ordenar = cats => [...cats.values()]
+    .map(cat => ({ ...cat, conceptos: cat.conceptos.sort((a, b) => b.real - a.real || b.ppto - a.ppto) }))
+    .sort((a, b) => b.real - a.real || b.ppto - a.ppto);
+  return { ingreso: ordenar(tipos.ingreso), gasto: ordenar(tipos.gasto) };
 }
 
-// ---------- Editor ----------
+function barra(real, ppto, tipo) {
+  if (!ppto) return '';
+  const pct = Math.min(real / ppto, 1) * 100;
+  const pasado = tipo === 'gasto' && real > ppto;
+  return `<div class="barra"><div class="barra-relleno${pasado ? ' pasado' : ''}" style="width:${pct.toFixed(1)}%"></div></div>`;
+}
 
-function opcionesCategoria(tipo, elegida) {
-  const sel = $('editor-form').categoria;
-  sel.innerHTML = CATEGORIAS[tipo].map(c =>
-    `<option value="${c.id}">${c.icono} ${c.nombre}</option>`).join('');
-  if (CATEGORIAS[tipo].some(c => c.id === elegida)) sel.value = elegida;
+// Diferencia contra el presupuesto, dicha en palabras.
+function diferencia(real, ppto, tipo) {
+  if (!ppto) return 'sin presupuesto';
+  const dif = real - ppto;
+  if (tipo === 'gasto') return dif > 0 ? `te pasaste ${dinero(dif)}` : `quedan ${dinero(-dif)}`;
+  return dif >= 0 ? `superaste por ${dinero(dif)}` : `faltan ${dinero(-dif)}`;
+}
+
+function bloqueTipo(titulo, cats, tipo) {
+  if (!cats.length) return '';
+  return `<h2 class="seccion">${titulo}</h2>` + cats.map(cat => `
+    <details class="categoria">
+      <summary>
+        <div class="fila"><strong>${escapar(cat.nombre)}</strong><span>${dinero(cat.real)}<small> de ${dinero(cat.ppto)}</small></span></div>
+        ${barra(cat.real, cat.ppto, tipo)}
+      </summary>
+      ${cat.conceptos.map(f => `
+        <div class="concepto-fila">
+          <div class="fila"><span>${escapar(f.c.icono)} ${escapar(f.c.nombre)}</span><span>${dinero(f.real)}<small> de ${dinero(f.ppto)}</small></span></div>
+          ${barra(f.real, f.ppto, tipo)}
+        </div>`).join('')}
+    </details>`).join('');
+}
+
+async function pintarResumen() {
+  pintarMes();
+  const movs = await DB.entre(...rangoMes(estado.mes));
+  const g = agrupar(movs);
+  const suma = (cats, campo) => cats.reduce((s, c) => s + c[campo], 0);
+  const ing = { real: suma(g.ingreso, 'real'), ppto: suma(g.ingreso, 'ppto') };
+  const egr = { real: suma(g.gasto, 'real'), ppto: suma(g.gasto, 'ppto') };
+  const saldo = ing.real - egr.real;
+
+  // Distribución de egresos por categoría (la dona del Excel), como una barra.
+  const conGasto = g.gasto.filter(c => c.real > 0);
+  const distribucion = egr.real ? `
+    <h2 class="seccion">Distribución de egresos</h2>
+    <div class="dist">${conGasto.map((c, i) =>
+      `<div style="width:${(c.real / egr.real * 100).toFixed(1)}%;background:${COLORES[i % COLORES.length]}"></div>`).join('')}</div>
+    <ul class="leyenda">${conGasto.map((c, i) =>
+      `<li><i style="background:${COLORES[i % COLORES.length]}"></i>${escapar(c.nombre)} <strong>${Math.round(c.real / egr.real * 100)}%</strong></li>`).join('')}</ul>` : '';
+
+  $('resumen').innerHTML = `
+    <div class="totales">
+      <div><span>Ingresos</span><strong class="ingreso">${dinero(ing.real)}</strong><small>Ppto ${dinero(ing.ppto)}</small></div>
+      <div><span>Egresos</span><strong class="gasto">${dinero(egr.real)}</strong><small>Ppto ${dinero(egr.ppto)}</small></div>
+      <div><span>Saldo</span><strong class="${saldo < 0 ? 'gasto' : ''}">${dinero(saldo)}</strong><small>Ppto ${dinero(ing.ppto - egr.ppto)}</small></div>
+    </div>
+    <p class="nota centro">Egresos: ${diferencia(egr.real, egr.ppto, 'gasto')}. Ingresos: ${diferencia(ing.real, ing.ppto, 'ingreso')}.</p>
+    ${bloqueTipo('Egresos por categoría', g.gasto, 'gasto')}
+    ${distribucion}
+    ${bloqueTipo('Ingresos por categoría', g.ingreso, 'ingreso')}`;
+}
+
+// ---------- Ajustes ----------
+
+function pintarAjustes() {
+  const grupos = new Map();
+  for (const c of estado.conceptos) {
+    const clave = `${c.tipo === 'gasto' ? 'Egreso' : 'Ingreso'} · ${c.categoria}`;
+    if (!grupos.has(clave)) grupos.set(clave, []);
+    grupos.get(clave).push(c);
+  }
+  const claves = [...grupos.keys()].sort((a, b) => a.localeCompare(b));
+  $('ajustes-lista').innerHTML = claves.map(k => `
+    <h2 class="seccion">${escapar(k)}</h2>
+    <ul class="lista">${grupos.get(k).map(c => `
+      <li><button type="button" class="mov" data-concepto="${escapar(c.id)}">
+        <span class="mov-icono">${escapar(c.icono)}</span>
+        <span class="mov-texto"><strong>${escapar(c.nombre)}</strong>${c.oculto ? '<small>Oculto en Anotar</small>' : ''}</span>
+        <span class="mov-monto">${dinero(c.presupuesto)}<small>al mes</small></span>
+      </button></li>`).join('')}</ul>`).join('');
+}
+
+function abrirConcepto(c) {
+  estado.editandoConcepto = c;
+  const f = $('concepto-form');
+  const categorias = [...new Set(estado.conceptos.map(x => x.categoria))].sort();
+  $('lista-categorias').innerHTML = categorias.map(x => `<option value="${escapar(x)}">`).join('');
+  f.nombre.value = c ? c.nombre : '';
+  f.icono.value = c ? c.icono : '';
+  f.tipo.value = c ? c.tipo : 'gasto';
+  f.categoria.value = c ? c.categoria : '';
+  f.presupuesto.value = c ? (c.presupuesto / 100).toFixed(2) : '';
+  f.oculto.checked = c ? !!c.oculto : false;
+  $('editor-concepto').showModal();
+}
+
+async function guardarConcepto() {
+  const f = $('concepto-form');
+  const ppto = f.presupuesto.value.trim() === '' ? 0 : aCentavos(f.presupuesto.value);
+  if (ppto === null) {
+    f.presupuesto.setCustomValidity('Escribe un monto, por ejemplo 100 o 20.50');
+    f.presupuesto.reportValidity();
+    return false;
+  }
+  const previo = estado.editandoConcepto;
+  const c = {
+    ...(previo || { id: nuevoId(), orden: estado.conceptos.length, usos: 0 }),
+    nombre: f.nombre.value.trim(),
+    icono: f.icono.value.trim() || '•',
+    tipo: f.tipo.value,
+    categoria: f.categoria.value.trim(),
+    presupuesto: ppto,
+    oculto: f.oculto.checked,
+  };
+  await DB.guardarConcepto(c);
+  await cargarConceptos();
+  return true;
+}
+
+// ---------- Exportar a Excel ----------
+
+async function exportar() {
+  const movs = (await DB.todos()).sort((a, b) => a.fecha.localeCompare(b.fecha));
+  const filas = [];
+  const meses = new Set();
+  for (const x of movs) {
+    const c = concepto(x.concepto);
+    meses.add(x.fecha.slice(0, 7));
+    filas.push([x.fecha.slice(0, 10), c.tipo, c.categoria, c.nombre, 0, x.monto, x.nota || '']);
+  }
+  // Como en el Excel: una fila de presupuesto por concepto el día 1 de cada mes, con monto 0.
+  for (const m of meses) {
+    for (const c of estado.conceptos.filter(c => c.presupuesto > 0)) {
+      filas.push([m + '-01', c.tipo, c.categoria, c.nombre, c.presupuesto, 0, '']);
+    }
+  }
+  filas.sort((a, b) => a[0].localeCompare(b[0]));
+  const datos = filas.map(([fecha, tipo, cat, con, ppto, monto, nota]) => [
+    { fecha }, MESES[Number(fecha.slice(5, 7)) - 1].replace(/^./, l => l.toUpperCase()), tipo === 'gasto' ? 'Egreso' : 'Ingreso',
+    cat, con, ppto / 100, monto / 100, nota,
+  ]);
+  const encabezado = ['Fecha', 'Mes', 'Tipo', 'Categoria', 'Concepto', 'Presupuesto', 'Monto', 'Nota'];
+  const blob = Excel.libro('Movimientos', [encabezado, ...datos]);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `finanzas-${fechaLocal().slice(0, 10)}.xlsx`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+// ---------- Editor de movimientos ----------
+
+function opcionesConcepto(tipo, elegido) {
+  const sel = $('editor-form').concepto;
+  const cats = new Map();
+  for (const c of estado.conceptos.filter(c => c.tipo === tipo)) {
+    if (!cats.has(c.categoria)) cats.set(c.categoria, []);
+    cats.get(c.categoria).push(c);
+  }
+  sel.innerHTML = [...cats].map(([cat, cs]) => `<optgroup label="${escapar(cat)}">${cs.map(c =>
+    `<option value="${escapar(c.id)}">${escapar(c.icono)} ${escapar(c.nombre)}</option>`).join('')}</optgroup>`).join('');
+  if (estado.conceptos.some(c => c.id === elegido && c.tipo === tipo)) sel.value = elegido;
 }
 
 function abrirEditor(mov) {
   estado.editando = mov;
   const f = $('editor-form');
   f.tipo.value = mov.tipo;
-  opcionesCategoria(mov.tipo, mov.categoria);
+  opcionesConcepto(mov.tipo, mov.concepto);
   f.monto.value = (mov.monto / 100).toFixed(2);
   f.fecha.value = mov.fecha.slice(0, 16);
   f.nota.value = mov.nota || '';
@@ -246,7 +425,7 @@ async function guardarEdicion() {
     ...estado.editando,
     tipo: f.tipo.value,
     monto: centavos,
-    categoria: f.categoria.value,
+    concepto: f.concepto.value,
     fecha: f.fecha.value + ':00',
     nota: f.nota.value.trim(),
     estado: 'listo',
@@ -258,11 +437,18 @@ async function guardarEdicion() {
 
 // ---------- Navegación ----------
 
+function repintar() {
+  if (estado.vista === 'anotar') pintarTipo();
+  if (estado.vista === 'movimientos') pintarMovimientos();
+  if (estado.vista === 'resumen') pintarResumen();
+  if (estado.vista === 'ajustes') pintarAjustes();
+}
+
 function mostrar(vista) {
   estado.vista = vista;
   document.querySelectorAll('.vista').forEach(v => v.classList.toggle('activa', v.id === 'vista-' + vista));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('activo', b.dataset.vista === vista));
-  if (vista === 'movimientos') pintarMovimientos();
+  repintar();
 }
 
 // ---------- Eventos ----------
@@ -272,9 +458,11 @@ $('teclado').addEventListener('click', e => {
   if (b) teclear(b.dataset.k);
 });
 
-$('categorias').addEventListener('click', e => {
+$('conceptos').addEventListener('click', async e => {
   const b = e.target.closest('.cat');
-  if (b) anotar(b.dataset.cat);
+  if (!b) return;
+  await anotar(b.dataset.concepto);
+  pintarTipo();
 });
 
 document.querySelector('.tipo').addEventListener('click', e => {
@@ -291,14 +479,10 @@ document.querySelector('.nav').addEventListener('click', e => {
 
 $('deshacer').addEventListener('click', deshacer);
 
-$('mes-anterior').addEventListener('click', () => {
-  estado.mes = new Date(estado.mes.getFullYear(), estado.mes.getMonth() - 1, 1);
-  pintarMovimientos();
-});
-$('mes-siguiente').addEventListener('click', () => {
-  estado.mes = new Date(estado.mes.getFullYear(), estado.mes.getMonth() + 1, 1);
-  pintarMovimientos();
-});
+document.querySelectorAll('[data-mes]').forEach(b => b.addEventListener('click', () => {
+  estado.mes = new Date(estado.mes.getFullYear(), estado.mes.getMonth() + Number(b.dataset.mes), 1);
+  repintar();
+}));
 
 $('lista').addEventListener('click', e => {
   const b = e.target.closest('.mov');
@@ -307,7 +491,7 @@ $('lista').addEventListener('click', e => {
   if (mov) abrirEditor(mov);
 });
 
-$('editor-form').tipo.addEventListener('change', e => opcionesCategoria(e.target.value));
+$('editor-form').tipo.addEventListener('change', e => opcionesConcepto(e.target.value));
 $('editor-form').monto.addEventListener('input', e => e.target.setCustomValidity(''));
 
 $('editor-form').addEventListener('submit', async e => {
@@ -315,7 +499,7 @@ $('editor-form').addEventListener('submit', async e => {
     e.preventDefault();
     if (await guardarEdicion()) {
       $('editor').close();
-      pintarMovimientos();
+      repintar();
     }
   }
 });
@@ -324,21 +508,41 @@ $('editor-borrar').addEventListener('click', async () => {
   const mov = estado.editando;
   $('editor').close();
   await DB.borrar(mov.id);
-  pintarMovimientos();
-  avisar(`Borrado: ${categoria(mov.categoria).nombre} ${dinero(mov.monto)}`, () => DB.guardar(mov));
+  repintar();
+  avisar(`Borrado: ${concepto(mov.concepto).nombre} ${dinero(mov.monto)}`, () => DB.guardar(mov));
 });
+
+$('ajustes-lista').addEventListener('click', e => {
+  const b = e.target.closest('[data-concepto]');
+  if (b) abrirConcepto(concepto(b.dataset.concepto));
+});
+$('nuevo-concepto').addEventListener('click', () => abrirConcepto(null));
+$('concepto-form').presupuesto.addEventListener('input', e => e.target.setCustomValidity(''));
+$('concepto-form').addEventListener('submit', async e => {
+  if (e.submitter && e.submitter.value === 'guardar') {
+    e.preventDefault();
+    if (await guardarConcepto()) {
+      $('editor-concepto').close();
+      repintar();
+    }
+  }
+});
+
+$('exportar').addEventListener('click', exportar);
 
 // Teclado físico (para probar en computadora).
 document.addEventListener('keydown', e => {
-  if (estado.vista !== 'anotar' || $('editor').open) return;
+  if (estado.vista !== 'anotar' || document.querySelector('dialog[open]')) return;
   if (/^\d$/.test(e.key)) teclear(e.key);
   else if (e.key === '.' || e.key === ',') teclear('.');
   else if (e.key === 'Backspace') teclear('borrar');
 });
 
-estado.vista = 'anotar';
-pintarTipo();
-pintarMonto();
+(async () => {
+  await cargarConceptos();
+  pintarTipo();
+  pintarMonto();
+})();
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(() => {});

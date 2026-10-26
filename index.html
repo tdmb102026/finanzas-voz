@@ -20,7 +20,7 @@
       </div>
 
       <output id="monto" class="monto" aria-live="polite">$0</output>
-      <p id="ayuda" class="ayuda">Escribe el monto y luego toca la categoría</p>
+      <p id="ayuda" class="ayuda">Escribe el monto y luego toca el concepto</p>
 
       <div class="teclado" id="teclado">
         <button type="button" data-k="1">1</button>
@@ -37,30 +37,48 @@
         <button type="button" data-k="borrar" aria-label="Borrar">⌫</button>
       </div>
 
-      <div id="categorias" class="categorias"></div>
+      <div id="conceptos" class="conceptos"></div>
     </section>
 
     <!-- Movimientos del mes -->
     <section id="vista-movimientos" class="vista">
       <header class="mes">
-        <button type="button" id="mes-anterior" aria-label="Mes anterior">‹</button>
-        <h1 id="mes-nombre"></h1>
-        <button type="button" id="mes-siguiente" aria-label="Mes siguiente">›</button>
+        <button type="button" data-mes="-1" aria-label="Mes anterior">‹</button>
+        <h1 class="mes-nombre"></h1>
+        <button type="button" data-mes="1" aria-label="Mes siguiente">›</button>
       </header>
-      <div class="totales">
-        <div><span>Ingresos</span><strong id="total-ingresos">$0.00</strong></div>
-        <div><span>Gastos</span><strong id="total-gastos">$0.00</strong></div>
-        <div><span>Saldo</span><strong id="total-saldo">$0.00</strong></div>
-      </div>
       <ul id="lista" class="lista"></ul>
       <p id="vacio" class="vacio">Sin movimientos este mes.</p>
       <p id="rapidez" class="rapidez"></p>
+    </section>
+
+    <!-- Resumen del mes, como el Dashboard del Excel -->
+    <section id="vista-resumen" class="vista">
+      <header class="mes">
+        <button type="button" data-mes="-1" aria-label="Mes anterior">‹</button>
+        <h1 class="mes-nombre"></h1>
+        <button type="button" data-mes="1" aria-label="Mes siguiente">›</button>
+      </header>
+      <div id="resumen"></div>
+    </section>
+
+    <!-- Ajustes: conceptos, presupuestos y exportar -->
+    <section id="vista-ajustes" class="vista">
+      <h1 class="titulo">Conceptos y presupuesto</h1>
+      <p class="nota">El presupuesto es mensual y se repite cada mes. Toca un concepto para cambiarlo.</p>
+      <div id="ajustes-lista"></div>
+      <button type="button" id="nuevo-concepto" class="boton-ancho">+ Nuevo concepto</button>
+      <h1 class="titulo">Exportar</h1>
+      <p class="nota">Descarga todos los movimientos con las columnas de tu Excel: Fecha, Mes, Tipo, Categoria, Concepto, Presupuesto, Monto.</p>
+      <button type="button" id="exportar" class="boton-ancho">Descargar CSV para Excel</button>
     </section>
   </main>
 
   <nav class="nav">
     <button type="button" class="nav-btn activo" data-vista="anotar">Anotar</button>
     <button type="button" class="nav-btn" data-vista="movimientos">Movimientos</button>
+    <button type="button" class="nav-btn" data-vista="resumen">Resumen</button>
+    <button type="button" class="nav-btn" data-vista="ajustes">Ajustes</button>
   </nav>
 
   <div id="aviso" class="aviso" role="status" hidden>
@@ -80,8 +98,8 @@
       <label>Monto ($)
         <input name="monto" inputmode="decimal" autocomplete="off" required>
       </label>
-      <label>Categoría
-        <select name="categoria"></select>
+      <label>Concepto
+        <select name="concepto"></select>
       </label>
       <label>Fecha
         <input name="fecha" type="datetime-local" required>
@@ -97,7 +115,38 @@
     </form>
   </dialog>
 
+  <dialog id="editor-concepto">
+    <form method="dialog" id="concepto-form">
+      <h2>Concepto</h2>
+      <label>Nombre
+        <input name="nombre" autocomplete="off" required>
+      </label>
+      <label>Icono (un emoji)
+        <input name="icono" autocomplete="off">
+      </label>
+      <label>Tipo
+        <select name="tipo">
+          <option value="gasto">Gasto</option>
+          <option value="ingreso">Ingreso</option>
+        </select>
+      </label>
+      <label>Categoría
+        <input name="categoria" list="lista-categorias" autocomplete="off" required>
+        <datalist id="lista-categorias"></datalist>
+      </label>
+      <label>Presupuesto mensual ($)
+        <input name="presupuesto" inputmode="decimal" autocomplete="off">
+      </label>
+      <label class="check"><input type="checkbox" name="oculto"> Ocultar en Anotar</label>
+      <div class="editor-botones">
+        <button value="cancelar" formnovalidate>Cancelar</button>
+        <button value="guardar" class="principal">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
   <script src="db.js"></script>
+  <script src="excel.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
