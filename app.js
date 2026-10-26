@@ -69,6 +69,9 @@ function rangoMes(d) {
   return [fechaLocal(desde), fechaLocal(hasta)];
 }
 
+// Los pendientes (frases por revisar) no cuentan en totales ni gráficos hasta que se confirman.
+const listos = movs => movs.filter(x => x.estado !== 'pendiente');
+
 async function cargarConceptos() {
   estado.conceptos = (await DB.conceptos()).sort((a, b) => a.orden - b.orden);
 }
@@ -186,9 +189,21 @@ function pintarMes() {
 
 async function pintarMovimientos() {
   pintarMes();
-  const movs = (await DB.entre(...rangoMes(estado.mes))).sort((a, b) => b.fecha.localeCompare(a.fecha));
+  const movs = listos(await DB.entre(...rangoMes(estado.mes))).sort((a, b) => b.fecha.localeCompare(a.fecha));
+  const pendientes = (await DB.todos()).filter(x => x.estado === 'pendiente').sort((a, b) => b.fecha.localeCompare(a.fecha));
 
   let dia = '', html = '';
+  if (pendientes.length) {
+    html += `<li class="dia revisar">Por revisar (${pendientes.length})</li>`;
+    for (const x of pendientes) {
+      const c = x.concepto ? concepto(x.concepto) : { icono: '❓' };
+      html += `<li><button type="button" class="mov pendiente" data-id="${x.id}">
+        <span class="mov-icono">${escapar(c.icono)}</span>
+        <span class="mov-texto"><strong>«${escapar(x.frase || 'Sin frase')}»</strong><small>${escapar(Voz.motivo(x))}</small></span>
+        <span class="mov-monto">${x.monto ? dinero(x.monto) : '$?'}<small>${x.fecha.slice(8, 10)}/${x.fecha.slice(5, 7)}</small></span>
+      </button></li>`;
+    }
+  }
   for (const x of movs) {
     const d = x.fecha.slice(0, 10);
     if (d !== dia) {
@@ -205,8 +220,8 @@ async function pintarMovimientos() {
     </button></li>`;
   }
   $('lista').innerHTML = html;
-  $('lista').movs = movs;
-  $('vacio').hidden = movs.length > 0;
+  $('lista').movs = [...pendientes, ...movs];
+  $('vacio').hidden = movs.length + pendientes.length > 0;
 
   // Meta de la fase 1: anotar en 3 segundos o menos.
   const medidos = movs.filter(x => x.ms != null);
@@ -280,7 +295,7 @@ function bloqueTipo(titulo, cats, tipo) {
 async function pintarResumen() {
   pintarMes();
   const m = estado.mes;
-  const movs = await DB.entre(...rangoMes(m));
+  const movs = listos(await DB.entre(...rangoMes(m)));
   const g = agrupar(movs);
   const suma = (cats, campo) => cats.reduce((s, c) => s + c[campo], 0);
   const ing = { real: suma(g.ingreso, 'real'), ppto: suma(g.ingreso, 'ppto') };
@@ -320,7 +335,7 @@ async function pintarResumen() {
 
   // 4. Últimos 6 meses: ingresos, gastos e inversión.
   const inicio = new Date(m.getFullYear(), m.getMonth() - 5, 1);
-  const seis = await DB.entre(fechaLocal(inicio), rangoMes(m)[1]);
+  const seis = listos(await DB.entre(fechaLocal(inicio), rangoMes(m)[1]));
   const meses = Array.from({ length: 6 }, (_, k) => {
     const f = new Date(inicio.getFullYear(), inicio.getMonth() + k, 1);
     const clave = fechaLocal(f).slice(0, 7);
@@ -365,7 +380,7 @@ async function pintarProyeccion() {
   const p = { ingreso: ppto('ingreso'), gasto: ppto('gasto'), inversion: ppto('inversion') };
   const libreP = p.ingreso - p.gasto - p.inversion;
 
-  const movs = await DB.entre(...rangoMes(hoy));
+  const movs = listos(await DB.entre(...rangoMes(hoy)));
   const real = tipo => movs.filter(x => x.tipo === tipo).reduce((s, x) => s + x.monto, 0);
   const r = { ingreso: real('ingreso'), gasto: real('gasto'), inversion: real('inversion') };
   const gastoCierre = Math.round(r.gasto / hoy.getDate() * totalDias);
@@ -407,6 +422,7 @@ async function pintarProyeccion() {
 
 function pintarAjustes() {
   pintarProyeccion();
+  Voz.pintarAjustes();
   const grupos = new Map();
   for (const c of estado.conceptos) {
     const clave = `${TIPOS[c.tipo].grupo} · ${c.categoria}`;
@@ -464,7 +480,7 @@ async function guardarConcepto() {
 // ---------- Exportar a Excel ----------
 
 async function exportar() {
-  const movs = (await DB.todos()).sort((a, b) => a.fecha.localeCompare(b.fecha));
+  const movs = listos(await DB.todos()).sort((a, b) => a.fecha.localeCompare(b.fecha));
   const filas = [];
   const meses = new Set();
   for (const x of movs) {
@@ -514,6 +530,9 @@ function abrirEditor(mov) {
   f.monto.value = (mov.monto / 100).toFixed(2);
   f.fecha.value = mov.fecha.slice(0, 16);
   f.nota.value = mov.nota || '';
+  $('editor-frase').textContent = mov.frase ? `Dijiste: «${mov.frase}»` : '';
+  $('editor-frase').hidden = !mov.frase;
+  $('editor-titulo').textContent = mov.estado === 'pendiente' ? 'Revisar y confirmar' : 'Editar movimiento';
   $('editor').showModal();
 }
 
@@ -536,7 +555,18 @@ async function guardarEdicion() {
     editado: new Date().toISOString(),
   };
   await DB.guardar(mov);
+  if (estado.editando.estado === 'pendiente') {
+    const c = estado.conceptos.find(x => x.id === mov.concepto);
+    if (c) { c.usos = (c.usos || 0) + 1; await DB.guardarConcepto(c); }
+  }
   return true;
+}
+
+// Cuántas frases esperan revisión: se ve como un número sobre Movimientos.
+async function pintarPendientes() {
+  const n = (await DB.todos()).filter(x => x.estado === 'pendiente').length;
+  const b = document.querySelector('.nav-btn[data-vista="movimientos"]');
+  if (n) b.dataset.cuenta = n; else delete b.dataset.cuenta;
 }
 
 // ---------- Navegación ----------
@@ -546,6 +576,7 @@ function repintar() {
   if (estado.vista === 'movimientos') pintarMovimientos();
   if (estado.vista === 'resumen') pintarResumen();
   if (estado.vista === 'ajustes') pintarAjustes();
+  pintarPendientes();
 }
 
 function mostrar(vista) {
@@ -613,7 +644,7 @@ $('editor-borrar').addEventListener('click', async () => {
   $('editor').close();
   await DB.borrar(mov.id);
   repintar();
-  avisar(`Borrado: ${concepto(mov.concepto).nombre} ${dinero(mov.monto)}`, () => DB.guardar(mov));
+  avisar(`Borrado: ${mov.concepto ? concepto(mov.concepto).nombre : '«' + mov.frase + '»'} ${dinero(mov.monto)}`, () => DB.guardar(mov));
 });
 
 $('ajustes-lista').addEventListener('click', e => {
@@ -646,6 +677,13 @@ document.addEventListener('keydown', e => {
   await cargarConceptos();
   pintarTipo();
   pintarMonto();
+  pintarPendientes();
+  // Acceso directo "Anotar por voz" del ícono: abre directo el micrófono.
+  if (new URLSearchParams(location.search).has('voz')) {
+    history.replaceState(null, '', location.pathname);
+    Voz.escuchar();
+  }
+  Voz.procesarPendientes();
 })();
 
 if ('serviceWorker' in navigator) {
