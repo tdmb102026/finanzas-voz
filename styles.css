@@ -81,11 +81,13 @@ body[data-tipo="ingreso"] .monto { color: var(--ingreso); }
 .ayuda { text-align: center; color: var(--suave); margin: 4px 0 12px; font-size: 14px; }
 .ayuda.alerta { color: var(--gasto); font-weight: 600; }
 
-.categorias {
+.conceptos {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
   margin-top: 12px;
+  max-height: 34vh;
+  overflow-y: auto;
 }
 .cat {
   border: 1px solid var(--borde);
@@ -99,7 +101,7 @@ body[data-tipo="ingreso"] .monto { color: var(--ingreso); }
   align-items: center;
   gap: 2px;
 }
-.cat span { font-size: 24px; }
+.cat span { font-size: 22px; }
 .cat:active { transform: scale(0.96); border-color: var(--acento); }
 
 .teclado {
@@ -119,7 +121,8 @@ body[data-tipo="ingreso"] .monto { color: var(--ingreso); }
 .teclado button:active { background: var(--borde); }
 
 /* ---------- Movimientos ---------- */
-#vista-movimientos { overflow-y: auto; }
+#vista-movimientos, #vista-resumen, #vista-ajustes { overflow-y: auto; }
+#vista-movimientos.activa, #vista-resumen.activa, #vista-ajustes.activa { display: block; }
 .mes { display: flex; align-items: center; justify-content: space-between; }
 .mes h1 { font-size: 20px; margin: 0; text-transform: capitalize; }
 .mes button { border: 0; background: none; font-size: 28px; padding: 4px 12px; color: var(--acento); }
@@ -138,9 +141,9 @@ body[data-tipo="ingreso"] .monto { color: var(--ingreso); }
 }
 .totales span { display: block; font-size: 12px; color: var(--suave); }
 .totales strong { font-size: 16px; font-variant-numeric: tabular-nums; }
-#total-ingresos { color: var(--ingreso); }
-#total-gastos { color: var(--gasto); }
-#total-saldo.negativo { color: var(--gasto); }
+.totales small { display: block; font-size: 11px; color: var(--suave); margin-top: 2px; }
+.ingreso { color: var(--ingreso); }
+.gasto { color: var(--gasto); }
 
 .lista { list-style: none; margin: 0; padding: 0; }
 .dia {
@@ -174,7 +177,7 @@ body[data-tipo="ingreso"] .monto { color: var(--ingreso); }
 /* ---------- Navegación y aviso ---------- */
 .nav {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(4, 1fr);
   border-top: 1px solid var(--borde);
   background: var(--superficie);
   padding-bottom: env(safe-area-inset-bottom);
@@ -238,3 +241,42 @@ dialog input, dialog select {
 }
 .editor-botones .principal { background: var(--acento); border-color: var(--acento); color: #fff; }
 .editor-botones .peligro { color: var(--gasto); }
+
+/* ---------- Resumen y Ajustes ---------- */
+.titulo { font-size: 20px; margin: 8px 0 4px; }
+.nota { color: var(--suave); font-size: 13px; margin: 4px 0 12px; }
+.centro { text-align: center; }
+.seccion { font-size: 14px; color: var(--suave); margin: 20px 0 8px; text-transform: uppercase; letter-spacing: 0.03em; }
+.fila { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.fila small { color: var(--suave); font-weight: 400; }
+.fila > span:last-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.categoria {
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+.categoria summary { list-style: none; cursor: pointer; }
+.categoria summary::-webkit-details-marker { display: none; }
+.categoria summary strong::before { content: '▸ '; color: var(--suave); }
+.categoria[open] summary strong::before { content: '▾ '; }
+.concepto-fila { margin-top: 10px; padding-left: 14px; font-size: 14px; }
+.barra { height: 6px; background: var(--tecla); border-radius: 3px; margin-top: 6px; overflow: hidden; }
+.barra-relleno { height: 100%; background: var(--acento); border-radius: 3px; }
+.barra-relleno.pasado { background: var(--gasto); }
+.dist { display: flex; height: 14px; border-radius: 7px; overflow: hidden; }
+.leyenda { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; }
+.leyenda i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; }
+.boton-ancho {
+  width: 100%;
+  margin: 12px 0;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--acento);
+  background: none;
+  color: var(--acento);
+  font-weight: 600;
+}
+dialog label.check { display: flex; align-items: center; gap: 8px; color: var(--texto); font-size: 15px; }
+dialog label.check input { width: auto; margin: 0; }
