@@ -1,6 +1,6 @@
 // Guardado local en el teléfono (IndexedDB). Funciona sin internet.
 const DB = (() => {
-  const NOMBRE = 'finanzas', VERSION = 3;
+  const NOMBRE = 'finanzas', VERSION = 4;
 
   // Conceptos iniciales, tomados del Excel de fer. Presupuesto mensual en centavos.
   const CONCEPTOS_INICIALES = [
@@ -14,6 +14,7 @@ const DB = (() => {
     ['medicina', 'Medicina', 'gasto', 'Gastos', 10000, '💊'],
     ['compras', 'Compras', 'gasto', 'Gastos', 5000, '🛍️'],
     ['amazon', 'Amazon', 'gasto', 'Gastos', 10000, '📦'],
+    ['otros', 'Otros', 'gasto', 'Gastos', 0, '📌'],
     ['luz', 'Luz', 'gasto', 'Servicios', 2000, '💡'],
     ['ahorro', 'Ahorro', 'inversion', 'Ahorro', 0, '🐷'],
     ['juguetes', 'Juguetes', 'inversion', 'Inversiones', 80000, '🧸'],
@@ -51,6 +52,17 @@ const DB = (() => {
     };
   }
 
+  // Versión 4: concepto "Otros" para gastos que no encajan en ninguno (la IA lo usa).
+  function agregarOtros(tx) {
+    const conceptos = tx.objectStore('conceptos');
+    conceptos.getAll().onsuccess = ev => {
+      const lista = ev.target.result;
+      if (lista.some(c => c.id === 'otros' || (c.tipo === 'gasto' && /^otros$/i.test(c.nombre.trim())))) return;
+      const otros = CONCEPTOS_INICIALES.find(c => c.id === 'otros');
+      conceptos.put({ ...otros, orden: lista.length });
+    };
+  }
+
   let conexion;
 
   function abrir() {
@@ -78,6 +90,7 @@ const DB = (() => {
           };
         }
         if (e.oldVersion === 2) aInversion(tx);
+        if (e.oldVersion >= 2 && e.oldVersion < 4) agregarOtros(tx);
       };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);

@@ -57,7 +57,8 @@ Reglas:
 - Una frase puede traer varios movimientos ("30 en el súper y 10 de gasolina"): devuelve uno por cada monto.
 - concepto: el id de la lista que mejor encaje. Ejemplos: súper, mercado o víveres → despensa; almuerzo, restaurante,
   cualquier comida o bebida (colada morada, encebollado, bolón, fritada, café, jugo, cola) → comidas; luz eléctrica → luz.
-  Si ninguno encaja con claridad, elige el más cercano y pon seguro en false.
+  Si ningún concepto encaja (por ejemplo un juguete, un regalo o algo suelto), usa el concepto llamado "Otros"
+  del mismo tipo si existe, con seguro en true si el monto está claro. Si no hay "Otros", elige el más cercano y pon seguro en false.
 - Si hay "ejemplos corregidos por la persona", síguelos: muestran cómo clasifica ella sus gastos.
 - monto: el número en dólares. Si la frase no dice un monto, pon 0 y seguro en false.
 - dias_atras: 0 si es de hoy o no lo dice; 1 si dice "ayer"; 2 si dice "anteayer"; para un día de la semana, cuántos días han pasado desde ese día.

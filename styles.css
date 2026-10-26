@@ -192,6 +192,19 @@ body[data-tipo="inversion"] .monto { color: var(--inversion); }
   padding: 10px 2px;
   text-align: left;
 }
+.lista li { position: relative; }
+.mov { touch-action: pan-y; }
+.lista li.deslizando { background: var(--critico); }
+.lista li.deslizando::before {
+  content: "Borrar";
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #fff;
+  font-weight: 600;
+}
+.lista li.deslizando .mov { position: relative; z-index: 1; background: var(--fondo); }
 .mov-icono { font-size: 22px; }
 .mov-texto { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .mov-texto small, .mov-monto small { color: var(--suave); font-size: 12px; font-weight: 400; }

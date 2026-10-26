@@ -594,7 +594,30 @@ function mostrar(vista) {
   document.querySelectorAll('.vista').forEach(v => v.classList.toggle('activa', v.id === 'vista-' + vista));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('activo', b.dataset.vista === vista));
   repintar();
+  seguirAtras();
 }
+
+// Botón o gesto de atrás: cierra la ventana abierta, luego vuelve a Anotar, y recién ahí sale.
+// Para eso se deja una entrada en el historial mientras no estemos en Anotar sin ventanas.
+function enInicio() {
+  return estado.vista === 'anotar' && !document.querySelector('dialog[open]');
+}
+
+function seguirAtras() {
+  const marcado = history.state && history.state.dentro;
+  if (!enInicio() && !marcado) history.pushState({ dentro: true }, '');
+  else if (enInicio() && marcado) history.back();
+}
+
+addEventListener('popstate', () => {
+  const abierta = document.querySelector('dialog[open]');
+  if (abierta) abierta.close();
+  else if (estado.vista !== 'anotar') mostrar('anotar');
+  seguirAtras();
+});
+
+new MutationObserver(seguirAtras)
+  .observe(document.body, { subtree: true, attributes: true, attributeFilter: ['open'] });
 
 // ---------- Eventos ----------
 
@@ -631,7 +654,7 @@ document.querySelectorAll('[data-mes]').forEach(b => b.addEventListener('click',
 
 $('lista').addEventListener('click', e => {
   const b = e.target.closest('.mov');
-  if (!b) return;
+  if (!b || b.dataset.arrastrado) return;
   const mov = $('lista').movs.find(x => x.id === b.dataset.id);
   if (mov) abrirEditor(mov);
 });
@@ -649,13 +672,56 @@ $('editor-form').addEventListener('submit', async e => {
   }
 });
 
-$('editor-borrar').addEventListener('click', async () => {
-  const mov = estado.editando;
-  $('editor').close();
+async function borrarMov(mov) {
   await DB.borrar(mov.id);
   repintar();
   avisar(`Borrado: ${mov.concepto ? concepto(mov.concepto).nombre : '«' + mov.frase + '»'} ${dinero(mov.monto)}`, () => DB.guardar(mov));
+}
+
+$('editor-borrar').addEventListener('click', () => {
+  $('editor').close();
+  borrarMov(estado.editando);
 });
+
+// Deslizar una fila a la izquierda la borra (con Deshacer en el aviso).
+let arrastre = null;
+$('lista').addEventListener('pointerdown', e => {
+  const b = e.target.closest('.mov');
+  if (b) arrastre = { b, x: e.clientX, y: e.clientY, dx: 0, moviendo: false };
+});
+$('lista').addEventListener('pointermove', e => {
+  if (!arrastre) return;
+  const dx = e.clientX - arrastre.x, dy = e.clientY - arrastre.y;
+  if (!arrastre.moviendo) {
+    if (Math.abs(dy) > 10) { arrastre = null; return; }
+    if (dx > -10) return;
+    arrastre.moviendo = true;
+    arrastre.b.setPointerCapture(e.pointerId);
+    arrastre.b.parentElement.classList.add('deslizando');
+  }
+  arrastre.dx = Math.min(0, dx);
+  arrastre.b.style.transform = `translateX(${arrastre.dx}px)`;
+});
+const soltar = () => {
+  if (!arrastre) return;
+  const { b, dx, moviendo } = arrastre;
+  arrastre = null;
+  if (!moviendo) return;
+  b.dataset.arrastrado = '1';  // para que el click que sigue no abra el editor
+  setTimeout(() => delete b.dataset.arrastrado, 50);
+  const mov = $('lista').movs.find(x => x.id === b.dataset.id);
+  if (mov && dx < -b.offsetWidth * 0.35) {
+    b.style.transition = 'transform .15s';
+    b.style.transform = 'translateX(-100%)';
+    setTimeout(() => borrarMov(mov), 150);
+  } else {
+    b.style.transition = 'transform .15s';
+    b.style.transform = '';
+    setTimeout(() => { b.style.transition = ''; b.parentElement.classList.remove('deslizando'); }, 150);
+  }
+};
+$('lista').addEventListener('pointerup', soltar);
+$('lista').addEventListener('pointercancel', soltar);
 
 $('ajustes-lista').addEventListener('click', e => {
   const b = e.target.closest('[data-concepto]');
