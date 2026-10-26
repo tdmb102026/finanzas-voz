@@ -12,6 +12,8 @@ const Voz = (() => {
     'sin-clave-api': 'Falta guardar la clave de Anthropic en el Apps Script.',
     'clave-api': 'La clave de Anthropic no funciona. Crea otra y guárdala en el Apps Script.',
     saldo: 'Se acabó el saldo de la IA. Carga créditos en la consola de Claude.',
+    'no-json': 'El Apps Script no respondió bien: revisa que esté implementado como Aplicación web con acceso "Cualquier persona".',
+    'sin-red': 'No se pudo conectar con el Apps Script. Revisa el enlace y la señal.',
   };
 
   // ---------- Ajustes (solo en este teléfono) ----------
@@ -31,7 +33,9 @@ const Voz = (() => {
       // text/plain para que Apps Script lo acepte sin permiso previo (CORS).
       const r = await fetch(a.url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ clave: a.clave, ...cuerpo }), signal: ctl.signal });
-      return await r.json();
+      // Si el Apps Script no está publicado para "Cualquier persona", Google responde con una
+      // página de inicio de sesión en vez de JSON.
+      try { return await r.json(); } catch { return { ok: false, error: 'no-json' }; }
     } catch {
       return { ok: false, error: 'sin-red' };
     } finally {
@@ -51,20 +55,23 @@ const Voz = (() => {
     e.preventDefault();
     const f = $('voz-form');
     const a = { url: f.url.value.trim(), clave: f.clave.value.trim() };
+    // El resultado va también arriba, en el aviso: con el teclado abierto el texto de abajo no se ve.
+    const decir = texto => { $('voz-estado').textContent = texto; avisar(texto); };
+    if (document.activeElement) document.activeElement.blur();
     if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(a.url)) {
-      $('voz-estado').textContent = 'El enlace debe ser el de la aplicación web del Apps Script, termina en /exec.';
+      decir('El enlace debe ser el de la aplicación web del Apps Script, termina en /exec.');
       return;
     }
-    $('voz-estado').textContent = 'Probando…';
+    if (!a.clave) { decir('Escribe la contraseña de la app.'); return; }
+    decir('Probando la conexión…');
     const j = await llamar({ tipo: 'probar' }, a);
     if (!j.ok) {
-      $('voz-estado').textContent = j.error === 'sin-red' ? 'No se pudo conectar. Revisa el enlace y la señal.'
-        : ERRORES[j.error] || 'El servidor respondió con un error.';
+      decir(ERRORES[j.error] || `El servidor respondió con un error (${j.error || 'desconocido'}).`);
       return;
     }
     escribir('voz-url', a.url);
     escribir('voz-clave', a.clave);
-    $('voz-estado').textContent = 'Listo: ya puedes anotar por voz.';
+    decir('Listo: ya puedes anotar por voz.');
     procesarPendientes();
   }
 
