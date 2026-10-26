@@ -695,5 +695,12 @@ document.addEventListener('keydown', e => {
 })();
 
 if ('serviceWorker' in navigator) {
+  // Cuando llega una versión nueva, se recarga una vez para usarla de inmediato
+  // (si no, la nueva solo se ve al abrir la app por segunda vez).
+  const habiaVersion = !!navigator.serviceWorker.controller;
+  let recargando = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (habiaVersion && !recargando) { recargando = true; location.reload(); }
+  });
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
