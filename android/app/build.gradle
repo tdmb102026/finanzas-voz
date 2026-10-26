@@ -11,8 +11,8 @@ android {
         minSdk 29
         targetSdk 35
         // GitHub pone el número de compilación, así cada APK nuevo se instala encima del anterior.
-        versionCode (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInteger()
-        versionName "1.0." + (System.getenv("GITHUB_RUN_NUMBER") ?: "0")
+        versionCode = Integer.parseInt(System.getenv("GITHUB_RUN_NUMBER") ?: "1")
+        versionName = "1.0." + (System.getenv("GITHUB_RUN_NUMBER") ?: "0")
     }
 
     // Firma fija (la clave de depuración estándar de Android, que es pública) para que las
