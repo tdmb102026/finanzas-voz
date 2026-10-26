@@ -88,6 +88,23 @@ const Voz = (() => {
     escribir('voz-ejemplos', JSON.stringify(lista.slice(-MAX_EJEMPLOS)));
   }
 
+  // La frase sin montos ni palabras de relleno: "$60 de import cap" y "40 en import cap" dan "import cap".
+  const RELLENO = new Set(('de del en el la los las un una unos unas por para con y a al me mi '
+    + 'dolar dolares centavo centavos pague gaste compre cobre pagaron gastado pagado').split(' '));
+  function clave(frase) {
+    return frase.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zñ\s]/g, ' ').split(/\s+/).filter(w => w && !RELLENO.has(w)).join(' ');
+  }
+
+  // Si ya corregiste una frase igual (cambia solo el monto), se anota sin preguntarle a la IA.
+  function yaAprendida(frase) {
+    const k = clave(frase);
+    const numeros = frase.match(/\d+(?:[.,]\d{1,2})?/g) || [];
+    if (!k || numeros.length !== 1) return null;
+    const ej = ejemplos().reverse().find(x => clave(x.frase) === k);
+    return ej && estado.conceptos.find(c => c.id === ej.concepto) || null;
+  }
+
   // ---------- Escuchar ----------
 
   let rec = null, tocada = false;
@@ -202,6 +219,14 @@ const Voz = (() => {
   // Manda la frase a la IA y guarda lo que entendió. Devuelve { movs, error }.
   async function clasificar(mov) {
     const hoy = new Date(mov.fecha);
+    const c = mov.monto > 0 && yaAprendida(mov.frase);
+    if (c) {
+      const m = { ...mov, tipo: c.tipo, concepto: c.id, estado: 'listo', ia: 'ok' };
+      await DB.guardar(m);
+      c.usos = (c.usos || 0) + 1;
+      await DB.guardarConcepto(c);
+      return { movs: [m] };
+    }
     const j = await llamar({
       tipo: 'frase',
       frase: mov.frase,
@@ -265,7 +290,7 @@ const Voz = (() => {
 
   // Por qué un movimiento sigue pendiente, en palabras.
   function motivo(m) {
-    if (m.ia === 'falta' || m.ia === 'enviando') return configurada() ? 'Se ordena solo al volver el internet' : 'Configura la voz para ordenarlo';
+    if (m.ia === 'falta' || m.ia === 'enviando') return configurada() ? 'Se ordena solo la próxima vez que abras la app' : 'Configura la voz para ordenarlo';
     if (m.ia === 'error') return 'La IA dio un error: corrígelo a mano';
     return 'La IA no estaba segura: toca para revisar';
   }
