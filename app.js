@@ -786,6 +786,25 @@ $('concepto-form').addEventListener('submit', async e => {
 
 $('exportar').addEventListener('click', exportar);
 
+// Empezar de cero: borra los movimientos (con Deshacer); conceptos y presupuestos se quedan.
+$('reiniciar').addEventListener('click', async () => {
+  const n = (await DB.todos()).length;
+  if (!n) { avisar('No hay movimientos que borrar.'); return; }
+  $('reinicio-texto').textContent = `Se borran ${n} movimiento${n > 1 ? 's' : ''}. Si quieres guardarlos, descarga antes el CSV.`;
+  $('confirmar-reinicio').returnValue = '';
+  $('confirmar-reinicio').showModal();
+});
+$('confirmar-reinicio').addEventListener('close', async () => {
+  if ($('confirmar-reinicio').returnValue !== 'borrar') return;
+  const copia = await DB.todos();
+  await DB.borrarTodos();
+  repintar();
+  avisar(`Listo: se borraron ${copia.length} movimientos.`, async () => {
+    for (const m of copia) await DB.guardar(m);
+    repintar();
+  });
+});
+
 // Teclado físico (para probar en computadora).
 document.addEventListener('keydown', e => {
   if (estado.vista !== 'anotar' || document.querySelector('dialog[open]')) return;

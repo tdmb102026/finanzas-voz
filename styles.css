@@ -283,6 +283,8 @@ dialog input, dialog select, dialog textarea {
 }
 .editor-botones .principal { background: var(--acento); border-color: var(--acento); color: #fff; }
 .editor-botones .peligro { color: var(--gasto); }
+.boton-ancho.peligro { color: var(--critico); }
+.editor-botones .peligro-fondo { background: var(--critico); border-color: var(--critico); color: #fff; }
 
 /* ---------- Resumen y Ajustes ---------- */
 .titulo { font-size: 20px; margin: 8px 0 4px; }
