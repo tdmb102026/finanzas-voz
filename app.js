@@ -4,6 +4,12 @@ const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
   'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 const SEGUNDOS_DESHACER = 4;
+// Nombre de cada tipo en pantalla y en el Excel.
+const TIPOS = {
+  gasto: { texto: 'gasto', excel: 'Egreso', grupo: 'Gasto' },
+  ingreso: { texto: 'ingreso', excel: 'Ingreso', grupo: 'Ingreso' },
+  inversion: { texto: 'inversión', excel: 'Inversión', grupo: 'Inversión' },
+};
 const COLORES = ['#2563eb', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16'];
 
 const $ = id => document.getElementById(id);
@@ -136,7 +142,7 @@ async function anotar(conceptoId) {
   c.usos = (c.usos || 0) + 1;
   await DB.guardarConcepto(c);
   vibrar(30);
-  avisar(`Anotado: ${mov.tipo} ${dinero(mov.monto)}, ${c.nombre.toLowerCase()}`, async () => {
+  avisar(`Anotado: ${TIPOS[mov.tipo].texto} ${dinero(mov.monto)}, ${c.nombre.toLowerCase()}`, async () => {
     await DB.borrar(mov.id);
     c.usos = Math.max(0, c.usos - 1);
     await DB.guardarConcepto(c);
@@ -192,7 +198,7 @@ async function pintarMovimientos() {
       html += `<li class="dia">${DIAS[f.getDay()]} ${f.getDate()}</li>`;
     }
     const c = concepto(x.concepto);
-    const signo = x.tipo === 'gasto' ? -1 : 1;
+    const signo = x.tipo === 'ingreso' ? 1 : -1;
     html += `<li><button type="button" class="mov ${x.tipo}" data-id="${x.id}">
       <span class="mov-icono">${escapar(c.icono)}</span>
       <span class="mov-texto"><strong>${escapar(c.nombre)}</strong><small>${escapar(c.categoria)}${x.nota ? ' · ' + escapar(x.nota) : ''}</small></span>
@@ -222,11 +228,11 @@ function agrupar(movs) {
   const real = {};
   for (const x of movs) real[x.concepto] = (real[x.concepto] || 0) + x.monto;
   const ids = new Set([...estado.conceptos.filter(c => c.presupuesto > 0).map(c => c.id), ...Object.keys(real)]);
-  const tipos = { ingreso: new Map(), gasto: new Map() };
+  const tipos = { ingreso: new Map(), gasto: new Map(), inversion: new Map() };
   for (const id of ids) {
     const c = concepto(id);
     const fila = { c, ppto: c.presupuesto || 0, real: real[id] || 0 };
-    const cats = tipos[c.tipo];
+    const cats = tipos[c.tipo] || tipos.gasto;
     if (!cats.has(c.categoria)) cats.set(c.categoria, { nombre: c.categoria, ppto: 0, real: 0, conceptos: [] });
     const cat = cats.get(c.categoria);
     cat.ppto += fila.ppto;
@@ -236,21 +242,23 @@ function agrupar(movs) {
   const ordenar = cats => [...cats.values()]
     .map(cat => ({ ...cat, conceptos: cat.conceptos.sort((a, b) => b.real - a.real || b.ppto - a.ppto) }))
     .sort((a, b) => b.real - a.real || b.ppto - a.ppto);
-  return { ingreso: ordenar(tipos.ingreso), gasto: ordenar(tipos.gasto) };
+  return { ingreso: ordenar(tipos.ingreso), gasto: ordenar(tipos.gasto), inversion: ordenar(tipos.inversion) };
 }
 
 function barra(real, ppto, tipo) {
   if (!ppto) return '';
   const pct = Math.min(real / ppto, 1) * 100;
   const pasado = tipo === 'gasto' && real > ppto;
-  return `<div class="barra"><div class="barra-relleno${pasado ? ' pasado' : ''}" style="width:${pct.toFixed(1)}%"></div></div>`;
+  return `<div class="barra"><div class="barra-relleno ${tipo}${pasado ? ' pasado' : ''}" style="width:${pct.toFixed(1)}%"></div></div>`;
 }
 
 // Diferencia contra el presupuesto, dicha en palabras.
 function diferencia(real, ppto, tipo) {
   if (!ppto) return 'sin presupuesto';
   const dif = real - ppto;
+  if (dif === 0) return 'justo lo presupuestado';
   if (tipo === 'gasto') return dif > 0 ? `te pasaste ${dinero(dif)}` : `quedan ${dinero(-dif)}`;
+  // Ingresos e inversión: llegar a la meta es lo bueno.
   return dif >= 0 ? `superaste por ${dinero(dif)}` : `faltan ${dinero(-dif)}`;
 }
 
@@ -277,12 +285,14 @@ async function pintarResumen() {
   const suma = (cats, campo) => cats.reduce((s, c) => s + c[campo], 0);
   const ing = { real: suma(g.ingreso, 'real'), ppto: suma(g.ingreso, 'ppto') };
   const egr = { real: suma(g.gasto, 'real'), ppto: suma(g.gasto, 'ppto') };
-  const saldo = ing.real - egr.real;
+  const inv = { real: suma(g.inversion, 'real'), ppto: suma(g.inversion, 'ppto') };
+  const libre = ing.real - egr.real - inv.real;
+  const pctInvertido = ing.real ? Math.round(inv.real / ing.real * 100) : 0;
 
   // Distribución de egresos por categoría (la dona del Excel), como una barra.
   const conGasto = g.gasto.filter(c => c.real > 0);
   const distribucion = egr.real ? `
-    <h2 class="seccion">Distribución de egresos</h2>
+    <h2 class="seccion">Distribución de gastos</h2>
     <div class="dist">${conGasto.map((c, i) =>
       `<div style="width:${(c.real / egr.real * 100).toFixed(1)}%;background:${COLORES[i % COLORES.length]}"></div>`).join('')}</div>
     <ul class="leyenda">${conGasto.map((c, i) =>
@@ -291,12 +301,15 @@ async function pintarResumen() {
   $('resumen').innerHTML = `
     <div class="totales">
       <div><span>Ingresos</span><strong class="ingreso">${dinero(ing.real)}</strong><small>Ppto ${dinero(ing.ppto)}</small></div>
-      <div><span>Egresos</span><strong class="gasto">${dinero(egr.real)}</strong><small>Ppto ${dinero(egr.ppto)}</small></div>
-      <div><span>Saldo</span><strong class="${saldo < 0 ? 'gasto' : ''}">${dinero(saldo)}</strong><small>Ppto ${dinero(ing.ppto - egr.ppto)}</small></div>
+      <div><span>Gastos</span><strong class="gasto">${dinero(egr.real)}</strong><small>Ppto ${dinero(egr.ppto)}</small></div>
+      <div><span>Inversión</span><strong class="inversion">${dinero(inv.real)}</strong><small>Ppto ${dinero(inv.ppto)}</small></div>
+      <div><span>Libre</span><strong class="${libre < 0 ? 'gasto' : ''}">${dinero(libre)}</strong><small>Ppto ${dinero(ing.ppto - egr.ppto - inv.ppto)}</small></div>
     </div>
-    <p class="nota centro">Egresos: ${diferencia(egr.real, egr.ppto, 'gasto')}. Ingresos: ${diferencia(ing.real, ing.ppto, 'ingreso')}.</p>
-    ${bloqueTipo('Egresos por categoría', g.gasto, 'gasto')}
+    <p class="nota centro">Ingresos − Gastos − Inversión = Libre. Inviertes el ${pctInvertido}% de lo que ganas.</p>
+    <p class="nota centro">Gastos: ${diferencia(egr.real, egr.ppto, 'gasto')}. Inversión: ${diferencia(inv.real, inv.ppto, 'inversion')}. Ingresos: ${diferencia(ing.real, ing.ppto, 'ingreso')}.</p>
+    ${bloqueTipo('Gastos por categoría', g.gasto, 'gasto')}
     ${distribucion}
+    ${bloqueTipo('Inversión por categoría', g.inversion, 'inversion')}
     ${bloqueTipo('Ingresos por categoría', g.ingreso, 'ingreso')}`;
 }
 
@@ -305,7 +318,7 @@ async function pintarResumen() {
 function pintarAjustes() {
   const grupos = new Map();
   for (const c of estado.conceptos) {
-    const clave = `${c.tipo === 'gasto' ? 'Egreso' : 'Ingreso'} · ${c.categoria}`;
+    const clave = `${TIPOS[c.tipo].grupo} · ${c.categoria}`;
     if (!grupos.has(clave)) grupos.set(clave, []);
     grupos.get(clave).push(c);
   }
@@ -376,7 +389,7 @@ async function exportar() {
   }
   filas.sort((a, b) => a[0].localeCompare(b[0]));
   const datos = filas.map(([fecha, tipo, cat, con, ppto, monto, nota]) => [
-    { fecha }, MESES[Number(fecha.slice(5, 7)) - 1].replace(/^./, l => l.toUpperCase()), tipo === 'gasto' ? 'Egreso' : 'Ingreso',
+    { fecha }, MESES[Number(fecha.slice(5, 7)) - 1].replace(/^./, l => l.toUpperCase()), TIPOS[tipo].excel,
     cat, con, ppto / 100, monto / 100, nota,
   ]);
   const encabezado = ['Fecha', 'Mes', 'Tipo', 'Categoria', 'Concepto', 'Presupuesto', 'Monto', 'Nota'];

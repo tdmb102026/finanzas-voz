@@ -6,6 +6,7 @@
   --suave: #64748b;
   --gasto: #dc2626;
   --ingreso: #16a34a;
+  --inversion: #7c3aed;
   --acento: #2563eb;
   --tecla: #f1f5f9;
   color-scheme: light dark;
@@ -19,6 +20,7 @@
     --suave: #94a3b8;
     --gasto: #f87171;
     --ingreso: #4ade80;
+  --inversion: #a78bfa;
     --acento: #60a5fa;
     --tecla: #1e293b;
   }
@@ -50,7 +52,7 @@ main {
 /* ---------- Anotar ---------- */
 .tipo {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   background: var(--tecla);
   border-radius: 12px;
   padding: 4px;
@@ -66,6 +68,7 @@ main {
 .tipo-btn.activo { background: var(--superficie); color: var(--texto); box-shadow: 0 1px 2px #0002; }
 body[data-tipo="gasto"] .tipo-btn.activo { color: var(--gasto); }
 body[data-tipo="ingreso"] .tipo-btn.activo { color: var(--ingreso); }
+body[data-tipo="inversion"] .tipo-btn.activo { color: var(--inversion); }
 
 .monto {
   display: block;
@@ -77,6 +80,7 @@ body[data-tipo="ingreso"] .tipo-btn.activo { color: var(--ingreso); }
 }
 body[data-tipo="gasto"] .monto { color: var(--gasto); }
 body[data-tipo="ingreso"] .monto { color: var(--ingreso); }
+body[data-tipo="inversion"] .monto { color: var(--inversion); }
 
 .ayuda { text-align: center; color: var(--suave); margin: 4px 0 12px; font-size: 14px; }
 .ayuda.alerta { color: var(--gasto); font-weight: 600; }
@@ -129,7 +133,7 @@ body[data-tipo="ingreso"] .monto { color: var(--ingreso); }
 
 .totales {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 8px;
   margin: 12px 0;
 }
@@ -144,6 +148,7 @@ body[data-tipo="ingreso"] .monto { color: var(--ingreso); }
 .totales small { display: block; font-size: 11px; color: var(--suave); margin-top: 2px; }
 .ingreso { color: var(--ingreso); }
 .gasto { color: var(--gasto); }
+.inversion { color: var(--inversion); }
 
 .lista { list-style: none; margin: 0; padding: 0; }
 .dia {
@@ -171,6 +176,7 @@ body[data-tipo="ingreso"] .monto { color: var(--ingreso); }
 .mov-monto { display: flex; flex-direction: column; align-items: flex-end; font-weight: 600; font-variant-numeric: tabular-nums; }
 .mov.gasto .mov-monto { color: var(--gasto); }
 .mov.ingreso .mov-monto { color: var(--ingreso); }
+.mov.inversion .mov-monto { color: var(--inversion); }
 
 .vacio, .rapidez { text-align: center; color: var(--suave); font-size: 14px; }
 
@@ -264,6 +270,8 @@ dialog input, dialog select {
 .concepto-fila { margin-top: 10px; padding-left: 14px; font-size: 14px; }
 .barra { height: 6px; background: var(--tecla); border-radius: 3px; margin-top: 6px; overflow: hidden; }
 .barra-relleno { height: 100%; background: var(--acento); border-radius: 3px; }
+.barra-relleno.ingreso { background: var(--ingreso); }
+.barra-relleno.inversion { background: var(--inversion); }
 .barra-relleno.pasado { background: var(--gasto); }
 .dist { display: flex; height: 14px; border-radius: 7px; overflow: hidden; }
 .leyenda { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; }
