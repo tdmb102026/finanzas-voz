@@ -131,7 +131,7 @@ async function anotar(catId) {
   estado.entrada = '';
   estado.inicio = null;
   estado.tipo = 'gasto'; // gasto por defecto en cada registro
-  $('ayuda').textContent = 'Escribe el monto y toca una categoría';
+  $('ayuda').textContent = 'Escribe el monto y luego toca la categoría';
   pintarTipo();
   pintarMonto();
 }
