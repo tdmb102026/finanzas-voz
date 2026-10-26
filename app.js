@@ -456,6 +456,7 @@ function abrirConcepto(c, nuevo = {}) {
   f.categoria.value = c ? c.categoria : nuevo.nombre ? comun : '';
   f.presupuesto.value = c ? (c.presupuesto / 100).toFixed(2) : '';
   f.oculto.checked = c ? !!c.oculto : false;
+  $('concepto-borrar').hidden = !c;
   $('editor-concepto').showModal();
 }
 
@@ -546,9 +547,10 @@ function abrirEditor(mov) {
   $('editor-frase').textContent = mov.frase ? `Dijiste: «${mov.frase}»` : '';
   $('editor-frase').hidden = !mov.frase;
   // Si la frase nombra algo que no tiene concepto (por ejemplo tu negocio), se ofrece crearlo.
-  const sugerido = mov.frase ? Voz.nombreSugerido(mov.frase) : '';
+  const dudosa = mov.ia === 'duda' && (!mov.concepto || mov.concepto === 'otros');
+  const sugerido = mov.frase && dudosa ? Voz.nombreSugerido(mov.frase) : '';
   const existe = estado.conceptos.some(c => c.nombre.toLowerCase() === sugerido.toLowerCase());
-  $('editor-nuevo').textContent = `+ Crear concepto «${sugerido}»`;
+  $('editor-nuevo').textContent = `¿Es algo nuevo? + Crear concepto «${sugerido}»`;
   $('editor-nuevo').hidden = !sugerido || existe;
   $('editor-titulo').textContent = mov.estado === 'pendiente' ? 'Revisar y confirmar' : 'Editar movimiento';
   $('editor').showModal();
@@ -584,9 +586,17 @@ async function guardarEdicion() {
 
 // Cuántas frases esperan revisión: se ve como un número sobre Movimientos.
 async function pintarPendientes() {
-  const n = (await DB.todos()).filter(x => x.estado === 'pendiente').length;
+  const pendientes = (await DB.todos()).filter(x => x.estado === 'pendiente');
   const b = document.querySelector('.nav-btn[data-vista="movimientos"]');
-  if (n) b.dataset.cuenta = n; else delete b.dataset.cuenta;
+  if (pendientes.length) b.dataset.cuenta = pendientes.length; else delete b.dataset.cuenta;
+  // Si el widget está ordenando una frase por detrás, se mira de nuevo en un rato.
+  clearTimeout(pintarPendientes.reloj);
+  if (pendientes.some(x => x.ia === 'enviando')) {
+    pintarPendientes.reloj = setTimeout(() => {
+      Voz.procesarPendientes();  // las que llevan más de un minuto se vuelven a mandar desde aquí
+      if (!document.querySelector('dialog[open]') && !arrastre) repintar(); else pintarPendientes();
+    }, 3000);
+  }
 }
 
 // ---------- Navegación ----------
@@ -738,6 +748,20 @@ $('ajustes-lista').addEventListener('click', e => {
   if (b) abrirConcepto(concepto(b.dataset.concepto));
 });
 $('nuevo-concepto').addEventListener('click', () => abrirConcepto(null));
+// Un concepto solo se borra si no tiene movimientos; si tiene, se puede ocultar.
+$('concepto-borrar').addEventListener('click', async () => {
+  const c = estado.editandoConcepto;
+  const usados = (await DB.todos()).filter(x => x.concepto === c.id).length;
+  if (usados) {
+    avisar(`«${c.nombre}» tiene ${usados} movimiento${usados > 1 ? 's' : ''}: mejor márcalo "Ocultar en Anotar".`);
+    return;
+  }
+  $('editor-concepto').close();
+  await DB.borrarConcepto(c.id);
+  await cargarConceptos();
+  repintar();
+  avisar(`Concepto borrado: ${c.nombre}`, async () => { await DB.guardarConcepto(c); await cargarConceptos(); repintar(); });
+});
 $('editor-nuevo').addEventListener('click', () => abrirConcepto(null, {
   nombre: Voz.nombreSugerido(estado.editando.frase),
   tipo: $('editor-form').tipo.value,
