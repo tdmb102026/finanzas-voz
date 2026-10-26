@@ -247,7 +247,7 @@ dialog {
 dialog::backdrop { background: #0008; }
 dialog h2 { margin: 0 0 12px; font-size: 18px; }
 dialog label { display: block; font-size: 13px; color: var(--suave); margin-bottom: 10px; }
-dialog input, dialog select {
+dialog input, dialog select, dialog textarea {
   display: block;
   width: 100%;
   margin-top: 4px;
@@ -375,3 +375,63 @@ dialog label.check input { width: auto; margin: 0; }
 .fila.linea { padding: 7px 0; border-bottom: 1px solid var(--borde); font-size: 14px; }
 .fila.linea strong { font-variant-numeric: tabular-nums; }
 .critico { color: var(--critico); }
+
+/* ---------- Voz ---------- */
+.voz-btn {
+  align-self: center;
+  border: 1px solid var(--acento);
+  background: none;
+  color: var(--acento);
+  border-radius: 999px;
+  padding: 8px 18px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.voz-btn:active { background: var(--tecla); }
+.mic {
+  display: block;
+  margin: 8px auto 0;
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--acento);
+  font-size: 32px;
+}
+.mic.escuchando { animation: latido 1s ease-in-out infinite; }
+@keyframes latido {
+  50% { box-shadow: 0 0 0 12px color-mix(in srgb, var(--acento) 25%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) { .mic.escuchando { animation: none; outline: 4px solid var(--borde); } }
+dialog textarea { resize: none; user-select: text; }
+.campos label { display: block; font-size: 13px; color: var(--suave); margin-bottom: 10px; }
+.campos input {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 10px;
+  font: inherit;
+  font-size: 16px;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  user-select: text;
+}
+.dia.revisar { color: var(--critico); text-transform: none; }
+.mov.pendiente .mov-texto strong { font-weight: 500; font-style: italic; }
+.mov.pendiente .mov-monto { color: var(--suave); }
+.nav-btn { position: relative; }
+.nav-btn[data-cuenta]::after {
+  content: attr(data-cuenta);
+  position: absolute;
+  top: 2px;
+  right: 6px;
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--critico);
+  color: #fff;
+  font-size: 11px;
+  line-height: 18px;
+}
