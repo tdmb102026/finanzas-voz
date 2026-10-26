@@ -1,6 +1,6 @@
 // Guardado local en el teléfono (IndexedDB). Funciona sin internet.
 const DB = (() => {
-  const NOMBRE = 'finanzas', VERSION = 2;
+  const NOMBRE = 'finanzas', VERSION = 3;
 
   // Conceptos iniciales, tomados del Excel de fer. Presupuesto mensual en centavos.
   const CONCEPTOS_INICIALES = [
@@ -15,10 +15,10 @@ const DB = (() => {
     ['compras', 'Compras', 'gasto', 'Gastos', 5000, '🛍️'],
     ['amazon', 'Amazon', 'gasto', 'Gastos', 10000, '📦'],
     ['luz', 'Luz', 'gasto', 'Servicios', 2000, '💡'],
-    ['ahorro', 'Ahorro', 'gasto', 'Ahorro', 0, '🐷'],
-    ['juguetes', 'Juguetes', 'gasto', 'Inversiones', 80000, '🧸'],
-    ['bienes-raices', 'Bienes raíces', 'gasto', 'Inversiones', 500000, '🏠'],
-    ['libros', 'Libros', 'gasto', 'Inversiones', 5000, '📚'],
+    ['ahorro', 'Ahorro', 'inversion', 'Ahorro', 0, '🐷'],
+    ['juguetes', 'Juguetes', 'inversion', 'Inversiones', 80000, '🧸'],
+    ['bienes-raices', 'Bienes raíces', 'inversion', 'Inversiones', 500000, '🏠'],
+    ['libros', 'Libros', 'inversion', 'Inversiones', 5000, '📚'],
   ].map(([id, nombre, tipo, categoria, presupuesto, icono], orden) =>
     ({ id, nombre, tipo, categoria, presupuesto, icono, orden, oculto: false, usos: 0 }));
 
@@ -28,6 +28,28 @@ const DB = (() => {
     ocio: 'salidas', 'otros-gasto': 'compras', sueldo: 'sueldo', ventas: 'ventas',
     'otros-ingreso': 'ventas',
   };
+
+  // Versión 3: Ahorro e Inversiones dejan de ser gasto y pasan al tipo inversión,
+  // junto con los movimientos ya anotados en esos conceptos.
+  function aInversion(tx) {
+    const conceptos = tx.objectStore('conceptos');
+    conceptos.getAll().onsuccess = ev => {
+      const ids = new Set();
+      for (const c of ev.target.result) {
+        if (c.tipo === 'gasto' && /^(ahorro|inversiones)$/i.test(c.categoria.trim())) {
+          c.tipo = 'inversion';
+          conceptos.put(c);
+          ids.add(c.id);
+        }
+      }
+      tx.objectStore('movimientos').openCursor().onsuccess = ev2 => {
+        const cur = ev2.target.result;
+        if (!cur) return;
+        if (ids.has(cur.value.concepto)) cur.update({ ...cur.value, tipo: 'inversion' });
+        cur.continue();
+      };
+    };
+  }
 
   let conexion;
 
@@ -55,6 +77,7 @@ const DB = (() => {
             cur.continue();
           };
         }
+        if (e.oldVersion === 2) aInversion(tx);
       };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);

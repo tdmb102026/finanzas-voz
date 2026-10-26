@@ -17,6 +17,7 @@
       <div class="tipo" role="radiogroup" aria-label="Tipo">
         <button type="button" class="tipo-btn activo" data-tipo="gasto" role="radio" aria-checked="true">Gasto</button>
         <button type="button" class="tipo-btn" data-tipo="ingreso" role="radio" aria-checked="false">Ingreso</button>
+        <button type="button" class="tipo-btn" data-tipo="inversion" role="radio" aria-checked="false">Inversión</button>
       </div>
 
       <output id="monto" class="monto" aria-live="polite">$0</output>
@@ -93,6 +94,7 @@
         <select name="tipo">
           <option value="gasto">Gasto</option>
           <option value="ingreso">Ingreso</option>
+          <option value="inversion">Inversión</option>
         </select>
       </label>
       <label>Monto ($)
@@ -128,6 +130,7 @@
         <select name="tipo">
           <option value="gasto">Gasto</option>
           <option value="ingreso">Ingreso</option>
+          <option value="inversion">Inversión</option>
         </select>
       </label>
       <label>Categoría

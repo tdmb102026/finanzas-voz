@@ -6,9 +6,9 @@ App para anotar gastos e ingresos en 3 segundos o menos. Funciona en el celular 
 
 Funciona como el Excel de fer (registros + dashboard), pero se anota desde el celular en 3 segundos.
 
-- **Anotar:** escribe el monto y toca el concepto (Comidas, Luz, Gasolina…); eso guarda. Cada concepto pertenece a una categoría (Gastos, Servicios, Ahorro, Inversiones; Sueldo, Negocio, Otros). Los conceptos más usados salen primero. "Deshacer" por 4 segundos.
+- **Anotar:** elige Gasto, Ingreso o Inversión, escribe el monto y toca el concepto (Comidas, Luz, Gasolina…); eso guarda. Cada concepto pertenece a una categoría: Gastos y Servicios (gasto); Sueldo, Negocio y Otros (ingreso); Ahorro e Inversiones (inversión). Los conceptos más usados salen primero. "Deshacer" por 4 segundos.
 - **Movimientos:** lista del mes; toca uno para corregirlo o borrarlo. Al pie, cuánto tardas en promedio en anotar.
-- **Resumen:** como el Dashboard del Excel. Ingresos, egresos y saldo del mes contra el presupuesto; cada categoría con su barra de avance y sus conceptos; distribución de egresos por categoría.
+- **Resumen:** como el Dashboard del Excel. Ingresos − Gastos − Inversión = Libre, contra el presupuesto, y el % del ingreso que se invierte; cada categoría con su barra de avance y sus conceptos; distribución de egresos por categoría.
 - **Ajustes:** crear o editar conceptos, su categoría y su presupuesto mensual (se repite cada mes). Exportar todo a un `.xlsx` con las columnas del Excel: Fecha, Mes, Tipo, Categoria, Concepto, Presupuesto, Monto, Nota. El presupuesto sale como una fila por concepto el día 1 de cada mes, igual que en el Excel.
 
 ## Cómo probarla
