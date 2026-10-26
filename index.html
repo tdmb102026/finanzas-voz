@@ -86,6 +86,9 @@
       <h1 class="titulo">Exportar</h1>
       <p class="nota">Descarga todos los movimientos con las columnas de tu Excel: Fecha, Mes, Tipo, Categoria, Concepto, Presupuesto, Monto.</p>
       <button type="button" id="exportar" class="boton-ancho">Descargar CSV para Excel</button>
+      <h1 class="titulo">Empezar de cero</h1>
+      <p class="nota">Borra todos los movimientos, también los por revisar. Tus conceptos, presupuestos y lo que aprendió la voz se quedan. Cada mes ya empieza solo en cero; esto es para limpiar las pruebas.</p>
+      <button type="button" id="reiniciar" class="boton-ancho peligro">Borrar todos los movimientos</button>
     </section>
   </main>
 
@@ -177,6 +180,17 @@
         <button type="button" id="concepto-borrar" class="peligro">Borrar</button>
         <button value="cancelar" formnovalidate>Cancelar</button>
         <button value="guardar" class="principal">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="confirmar-reinicio">
+    <form method="dialog">
+      <h2>¿Borrar todos los movimientos?</h2>
+      <p id="reinicio-texto" class="nota"></p>
+      <div class="editor-botones">
+        <button value="cancelar">Cancelar</button>
+        <button value="borrar" class="principal peligro-fondo">Borrar todo</button>
       </div>
     </form>
   </dialog>

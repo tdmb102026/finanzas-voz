@@ -115,6 +115,7 @@ const DB = (() => {
     entre: (desde, hasta) => operar('movimientos', 'readonly', t =>
       t.index('fecha').getAll(IDBKeyRange.bound(desde, hasta, false, true))),
     todos: () => operar('movimientos', 'readonly', t => t.getAll()),
+    borrarTodos: () => operar('movimientos', 'readwrite', t => t.clear()),
     conceptos: () => operar('conceptos', 'readonly', t => t.getAll()),
     guardarConcepto: c => operar('conceptos', 'readwrite', t => t.put(c)),
     borrarConcepto: id => operar('conceptos', 'readwrite', t => t.delete(id)),
