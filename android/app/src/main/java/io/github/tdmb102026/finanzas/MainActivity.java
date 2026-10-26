@@ -5,15 +5,18 @@ import android.content.ActivityNotFoundException;
 import android.content.ContentValues;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.speech.RecognizerIntent;
 import android.util.Base64;
+import android.view.WindowInsets;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.FrameLayout;
 import android.widget.Toast;
 
 import org.json.JSONObject;
@@ -61,7 +64,18 @@ public class MainActivity extends Activity {
                 }
             }
         });
-        setContentView(web);
+        // El WebView va dentro de un marco: Android 15 dibuja la app debajo de la barra de la hora
+        // y de la de gestos, y el marco deja ese espacio libre (y el del teclado) para que nada quede tapado.
+        FrameLayout marco = new FrameLayout(this);
+        marco.addView(web);
+        setContentView(marco);
+        if (Build.VERSION.SDK_INT >= 30) {
+            marco.setOnApplyWindowInsetsListener((v, insets) -> {
+                android.graphics.Insets b = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.ime());
+                v.setPadding(b.left, b.top, b.right, b.bottom);
+                return WindowInsets.CONSUMED;
+            });
+        }
 
         vozPendiente = esVoz(getIntent());
         if (guardado != null) web.restoreState(guardado);
