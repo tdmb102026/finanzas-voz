@@ -12,3 +12,5 @@
 - El celular de fer dejó de instalar apps web desde Chrome (2026-10-26; en otro celular sí funciona): por eso la app Android.
 - Cambios en `ia-servidor/finanzas-ia.gs` no se aplican solos: fer debe pegar el código nuevo en su Apps Script y publicar una versión nueva (Implementar → Gestionar implementaciones → editar → Nueva versión). Avisarle cada vez.
 - Lo que fer corrige en "Por revisar" se guarda como ejemplo (`voz-ejemplos`, últimos 30) y se manda a la IA en cada frase.
+- Atrás (gesto de Android o botón): la app deja una entrada en el historial mientras haya una ventana abierta o no esté en Anotar; atrás cierra la ventana, luego vuelve a Anotar, y recién ahí sale (`seguirAtras` en app.js).
+- Deslizar una fila de Movimientos a la izquierda la borra, con Deshacer en el aviso.
