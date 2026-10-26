@@ -75,6 +75,19 @@ const Voz = (() => {
     procesarPendientes();
   }
 
+  // ---------- Ejemplos corregidos ----------
+
+  // Las frases que corriges en "Por revisar" van como ejemplos a la IA (las 30 últimas).
+  const MAX_EJEMPLOS = 30;
+  function ejemplos() {
+    try { return JSON.parse(leer('voz-ejemplos') || '[]'); } catch { return []; }
+  }
+  function aprender(frase, mov) {
+    const lista = ejemplos().filter(x => x.frase !== frase);
+    lista.push({ frase, concepto: mov.concepto, monto: mov.monto / 100 });
+    escribir('voz-ejemplos', JSON.stringify(lista.slice(-MAX_EJEMPLOS)));
+  }
+
   // ---------- Escuchar ----------
 
   let rec = null, tocada = false;
@@ -147,7 +160,7 @@ const Voz = (() => {
       nota: '',
       frase,
       estado: 'pendiente',
-      ia: 'falta',
+      ia: 'enviando',
       ms: null,
       creado: new Date().toISOString(),
     };
@@ -156,9 +169,11 @@ const Voz = (() => {
     vibrar(30);
     avisar(`Anotando: «${frase}»…`);
     const r = await clasificar(mov);
-    avisar(mensaje(r, frase), () => deshacerTodo(r.movs));
+    const texto = mensaje(r, frase);
+    avisar(texto, () => deshacerTodo(r.movs));
     repintar();
     pintarPendientes();
+    return texto;
   }
 
   function mensaje(r, frase) {
@@ -192,10 +207,12 @@ const Voz = (() => {
       frase: mov.frase,
       hoy: `${DIAS[hoy.getDay()]} ${mov.fecha.slice(0, 10)}`,
       conceptos: estado.conceptos.map(c => ({ id: c.id, nombre: c.nombre, tipo: c.tipo, categoria: c.categoria })),
+      ejemplos: ejemplos().filter(x => estado.conceptos.some(c => c.id === x.concepto)),
     });
     if (!j.ok) {
-      if (j.error !== 'sin-red') await DB.guardar({ ...mov, ia: 'error' });
-      return { movs: [mov], error: j.error };
+      const m = { ...mov, ia: j.error === 'sin-red' ? 'falta' : 'error' };
+      await DB.guardar(m);
+      return { movs: [m], error: j.error };
     }
     if (!j.movimientos.length) {
       const m = { ...mov, ia: 'duda' };
@@ -233,7 +250,9 @@ const Voz = (() => {
     if (procesando || !configurada() || !navigator.onLine) return;
     procesando = true;
     try {
-      const faltan = (await DB.todos()).filter(m => m.estado === 'pendiente' && m.ia === 'falta' && m.frase);
+      // "enviando" de hace rato: la app se cerró antes de que respondiera la IA.
+      const colgada = m => m.ia === 'enviando' && Date.now() - Date.parse(m.creado) > 120000;
+      const faltan = (await DB.todos()).filter(m => m.estado === 'pendiente' && (m.ia === 'falta' || colgada(m)) && m.frase);
       for (const m of faltan) {
         const r = await clasificar(m);
         if (r.error === 'sin-red') break;
@@ -246,7 +265,7 @@ const Voz = (() => {
 
   // Por qué un movimiento sigue pendiente, en palabras.
   function motivo(m) {
-    if (m.ia === 'falta') return configurada() ? 'Se ordena solo al volver el internet' : 'Configura la voz para ordenarlo';
+    if (m.ia === 'falta' || m.ia === 'enviando') return configurada() ? 'Se ordena solo al volver el internet' : 'Configura la voz para ordenarlo';
     if (m.ia === 'error') return 'La IA dio un error: corrígelo a mano';
     return 'La IA no estaba segura: toca para revisar';
   }
@@ -267,8 +286,13 @@ const Voz = (() => {
   window.addEventListener('online', procesarPendientes);
 
   // Respuestas de la app Android: lo que se dijo, o que el teléfono no tiene reconocimiento de voz.
-  function oido(texto) { if (texto && texto.trim()) enviar(texto.trim()); }
+  // El widget usa una pantalla invisible: al terminar, se le pasa el aviso para que lo muestre y se cierre.
+  async function oido(texto) {
+    await arranque;
+    const aviso = texto && texto.trim() ? await enviar(texto.trim()) : 'No se escuchó nada.';
+    if (nativo && nativo.resultado) nativo.resultado(aviso);
+  }
   function sinVozNativa() { abrirDialogo(); }
 
-  return { escuchar, oido, sinVozNativa, procesarPendientes, pintarAjustes, motivo, configurada };
+  return { escuchar, oido, sinVozNativa, aprender, procesarPendientes, pintarAjustes, motivo, configurada };
 })();

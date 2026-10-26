@@ -55,12 +55,15 @@ La moneda es siempre el dólar. "1.50", "uno cincuenta", "un dólar con cincuent
 La frase viene de un dictado por voz: puede traer errores de transcripción. Interprétala con sentido común, pero no inventes datos.
 Reglas:
 - Una frase puede traer varios movimientos ("30 en el súper y 10 de gasolina"): devuelve uno por cada monto.
-- concepto: el id de la lista que mejor encaje. Ejemplos: súper, mercado o víveres → despensa; almuerzo, restaurante o comida → comidas; luz eléctrica → luz.
+- concepto: el id de la lista que mejor encaje. Ejemplos: súper, mercado o víveres → despensa; almuerzo, restaurante,
+  cualquier comida o bebida (colada morada, encebollado, bolón, fritada, café, jugo, cola) → comidas; luz eléctrica → luz.
   Si ninguno encaja con claridad, elige el más cercano y pon seguro en false.
+- Si hay "ejemplos corregidos por la persona", síguelos: muestran cómo clasifica ella sus gastos.
 - monto: el número en dólares. Si la frase no dice un monto, pon 0 y seguro en false.
 - dias_atras: 0 si es de hoy o no lo dice; 1 si dice "ayer"; 2 si dice "anteayer"; para un día de la semana, cuántos días han pasado desde ese día.
 - nota: un detalle útil de la frase que no sea el monto ni el concepto (por ejemplo "almuerzo con Ana"), o "" si no hay.
-- seguro: true solo si el monto y el concepto se entienden sin duda. Si dudas, false: la persona lo revisará.
+- seguro: true si el monto está claro y el concepto elegido es razonable, aunque la palabra exacta no esté en la lista
+  (por ejemplo, una comida típica → comidas). false solo si falta el monto o si dudas entre conceptos muy distintos.
 - Si la frase no es un gasto, ingreso o inversión (por ejemplo "hola" o "pagué lo de siempre"), devuelve la lista vacía.`;
 
 function esquema_(ids) {
@@ -86,7 +89,14 @@ function conceptos_(lista) {
 
 // Llamada a la API de Claude (Apps Script no tiene SDK de Anthropic: va por HTTP).
 // Esfuerzo bajo: es una tarea corta y la respuesta tiene que llegar en un par de segundos.
-function claude_(frase, conceptos, hoy) {
+// Frases que la persona corrigió en la app: [{frase, concepto, monto}].
+function ejemplos_(lista, ids) {
+  return (Array.isArray(lista) ? lista : []).slice(-30)
+    .filter(x => x && ids.indexOf(String(x.concepto)) >= 0)
+    .map(x => `«${String(x.frase || "").slice(0, 200)}» → ${x.concepto}, ${Number(x.monto) || 0}`);
+}
+
+function claude_(frase, conceptos, hoy, ejemplos) {
   const key = PropertiesService.getScriptProperties().getProperty("ANTHROPIC_API_KEY");
   if (!key) return { ok: false, error: "sin-clave-api" };
   const lista = conceptos.map(c => `${c.id} | ${c.nombre} | ${c.tipo} | ${c.categoria}`).join("\n");
@@ -94,7 +104,9 @@ function claude_(frase, conceptos, hoy) {
     model: MODELO, max_tokens: 4000,
     output_config: { effort: "low", format: { type: "json_schema", schema: esquema_(conceptos.map(c => c.id)) } },
     system: SISTEMA,
-    messages: [{ role: "user", content: `Conceptos (id | nombre | tipo | categoría):\n${lista}\n\nHoy es ${hoy}.\nFrase: «${frase}»` }],
+    messages: [{ role: "user", content: `Conceptos (id | nombre | tipo | categoría):\n${lista}\n\n`
+      + (ejemplos.length ? `Ejemplos corregidos por la persona:\n${ejemplos.join("\n")}\n\n` : "")
+      + `Hoy es ${hoy}.\nFrase: «${frase}»` }],
   };
   const r = UrlFetchApp.fetch("https://api.anthropic.com/v1/messages", {
     method: "post", contentType: "application/json", muteHttpExceptions: true,
@@ -124,7 +136,7 @@ function doPost(e) {
     const frase = String(q.frase || "").trim().slice(0, 500);
     const conceptos = conceptos_(q.conceptos);
     if (!frase || !conceptos.length) return json_({ ok: false, error: "pedido" });
-    const r = claude_(frase, conceptos, String(q.hoy || "").slice(0, 40));
+    const r = claude_(frase, conceptos, String(q.hoy || "").slice(0, 40), ejemplos_(q.ejemplos, conceptos.map(c => c.id)));
     anotarHoja_(frase, r.ok ? r.movimientos : r, r.uso);
     delete r.uso;
     return json_(r);
