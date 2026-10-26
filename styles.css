@@ -312,6 +312,16 @@ dialog input, dialog select, dialog textarea {
 .barra-relleno.pasado { background: var(--critico); }
 .leyenda { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; }
 .leyenda i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; }
+.enlace {
+  border: 0;
+  background: none;
+  color: var(--acento);
+  font: inherit;
+  font-size: 14px;
+  padding: 0;
+  margin: -4px 0 4px;
+  text-align: left;
+}
 .boton-ancho {
   width: 100%;
   margin: 12px 0;

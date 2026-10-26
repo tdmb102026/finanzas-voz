@@ -96,6 +96,13 @@ const Voz = (() => {
       .replace(/[^a-zñ\s]/g, ' ').split(/\s+/).filter(w => w && !RELLENO.has(w)).join(' ');
   }
 
+  // Nombre para un concepto nuevo sacado de la frase: "$60 de import cap" → "Import Cap".
+  function nombreSugerido(frase) {
+    const palabras = clave(frase).split(' ').filter(Boolean);
+    if (!palabras.length || palabras.length > 3) return '';
+    return palabras.map(w => w[0].toUpperCase() + w.slice(1)).join(' ');
+  }
+
   // Si ya corregiste una frase igual (cambia solo el monto), se anota sin preguntarle a la IA.
   function yaAprendida(frase) {
     const k = clave(frase);
@@ -319,5 +326,5 @@ const Voz = (() => {
   }
   function sinVozNativa() { abrirDialogo(); }
 
-  return { escuchar, oido, sinVozNativa, aprender, procesarPendientes, pintarAjustes, motivo, configurada };
+  return { escuchar, oido, nombreSugerido, sinVozNativa, aprender, procesarPendientes, pintarAjustes, motivo, configurada };
 })();
