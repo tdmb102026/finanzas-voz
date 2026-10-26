@@ -18,7 +18,10 @@ const Voz = (() => {
 
   function leer(k) { try { return localStorage.getItem(k) || ''; } catch { return ''; } }
   function escribir(k, v) { try { localStorage.setItem(k, v); } catch { /* sin almacenamiento */ } }
-  const ajustes = () => ({ url: leer('voz-url'), clave: leer('voz-clave') });
+  // Enlace de la aplicación web del Apps Script de fer (no es secreto: lo protege la contraseña).
+  // Se puede cambiar en Proyección → Anotar por voz.
+  const URL_SERVIDOR = 'https://script.google.com/macros/s/AKfycbyxXIiCCKmZjdPKsmFEwgZ1oJ7UbtJdPVGMVc4YiX9p902HJTnkTxjFdnUjIivYgxo8Lw/exec';
+  const ajustes = () => ({ url: leer('voz-url') || URL_SERVIDOR, clave: leer('voz-clave') });
   const configurada = () => { const a = ajustes(); return !!(a.url && a.clave); };
 
   async function llamar(cuerpo, a = ajustes()) {
@@ -41,7 +44,7 @@ const Voz = (() => {
     const a = ajustes();
     f.url.value = a.url;
     f.clave.value = a.clave;
-    $('voz-estado').textContent = configurada() ? 'Lista en este teléfono.' : 'Falta configurarla (pasos en ia-servidor/LEEME.md).';
+    $('voz-estado').textContent = configurada() ? 'Lista en este teléfono.' : 'Escribe la contraseña de la app y toca Guardar y probar.';
   }
 
   async function guardarAjustes(e) {
@@ -71,7 +74,7 @@ const Voz = (() => {
 
   function escuchar() {
     if (!configurada()) {
-      avisar('Primero configura la voz en Proyección → Anotar por voz.');
+      avisar('Primero escribe la contraseña de la voz en Proyección → Anotar por voz.');
       return;
     }
     if (nativo) { nativo.escuchar(); return; }
