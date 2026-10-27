@@ -1,13 +1,13 @@
 {
   "id": "/finanzas-voz/?app=finanzas",
-  "name": "Finanzas en 3 segundos",
-  "short_name": "Finanzas",
+  "name": "Hormiga$to$ · Controla tus finanzas",
+  "short_name": "MIG",
   "lang": "es",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#f8fafc",
-  "theme_color": "#0f172a",
+  "background_color": "#faf7f0",
+  "theme_color": "#c2570c",
   "icons": [
     {
       "src": "icon-192.png",

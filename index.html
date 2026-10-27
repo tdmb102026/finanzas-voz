@@ -3,8 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0f172a">
-  <title>Finanzas</title>
+  <meta name="theme-color" content="#faf7f0" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#121712" media="(prefers-color-scheme: dark)">
+  <title>Hormiga$to$ · MIG</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon.svg">
@@ -14,10 +15,15 @@
   <main>
     <!-- Anotar: la pantalla de los 3 segundos -->
     <section id="vista-anotar" class="vista activa">
+      <header class="marca-app">
+        <img src="icon.svg" alt="">
+        <strong>Hormiga$to$</strong>
+        <small>· Controla tus finanzas</small>
+      </header>
       <div class="tipo" role="radiogroup" aria-label="Tipo">
-        <button type="button" class="tipo-btn activo" data-tipo="gasto" role="radio" aria-checked="true">Gasto</button>
-        <button type="button" class="tipo-btn" data-tipo="ingreso" role="radio" aria-checked="false">Ingreso</button>
-        <button type="button" class="tipo-btn" data-tipo="inversion" role="radio" aria-checked="false">Inversión</button>
+        <button type="button" class="tipo-btn activo" data-tipo="gasto" role="radio" aria-checked="true"><i class="bicho" aria-hidden="true">🐜</i>Gasto</button>
+        <button type="button" class="tipo-btn" data-tipo="ingreso" role="radio" aria-checked="false"><i class="bicho" aria-hidden="true">🐝</i>Ingreso</button>
+        <button type="button" class="tipo-btn" data-tipo="inversion" role="radio" aria-checked="false"><i class="bicho" aria-hidden="true">🐿️</i>Inversión</button>
       </div>
 
       <output id="monto" class="monto" aria-live="polite">$0</output>
@@ -25,17 +31,17 @@
       <button type="button" id="voz" class="voz-btn">🎤 Anotar por voz</button>
 
       <div class="teclado" id="teclado">
-        <button type="button" data-k="1">1</button>
-        <button type="button" data-k="2">2</button>
-        <button type="button" data-k="3">3</button>
-        <button type="button" data-k="4">4</button>
-        <button type="button" data-k="5">5</button>
-        <button type="button" data-k="6">6</button>
-        <button type="button" data-k="7">7</button>
-        <button type="button" data-k="8">8</button>
-        <button type="button" data-k="9">9</button>
+        <button type="button" data-k="1">1<i class="bicho" aria-hidden="true">🦄</i></button>
+        <button type="button" data-k="2">2<i class="bicho" aria-hidden="true">🦆</i></button>
+        <button type="button" data-k="3">3<i class="bicho" aria-hidden="true">🦥</i></button>
+        <button type="button" data-k="4">4<i class="bicho" aria-hidden="true">🐢</i></button>
+        <button type="button" data-k="5">5<i class="bicho" aria-hidden="true">🐠</i></button>
+        <button type="button" data-k="6">6<i class="bicho" aria-hidden="true">🐜</i></button>
+        <button type="button" data-k="7">7<i class="bicho" aria-hidden="true">🐞</i></button>
+        <button type="button" data-k="8">8<i class="bicho" aria-hidden="true">🐙</i></button>
+        <button type="button" data-k="9">9<i class="bicho" aria-hidden="true">🐈</i></button>
         <button type="button" data-k=".">.</button>
-        <button type="button" data-k="0">0</button>
+        <button type="button" data-k="0">0<i class="bicho" aria-hidden="true">🐌</i></button>
         <button type="button" data-k="borrar" aria-label="Borrar">⌫</button>
       </div>
 
@@ -93,10 +99,10 @@
   </main>
 
   <nav class="nav">
-    <button type="button" class="nav-btn activo" data-vista="anotar">Anotar</button>
-    <button type="button" class="nav-btn" data-vista="movimientos">Movimientos</button>
-    <button type="button" class="nav-btn" data-vista="resumen">Resumen</button>
-    <button type="button" class="nav-btn" data-vista="ajustes">Proyección</button>
+    <button type="button" class="nav-btn activo" data-vista="anotar"><i class="bicho" aria-hidden="true">🐜</i>Anotar</button>
+    <button type="button" class="nav-btn" data-vista="movimientos"><i class="bicho" aria-hidden="true">🦎</i>Movimientos</button>
+    <button type="button" class="nav-btn" data-vista="resumen"><i class="bicho" aria-hidden="true">🦉</i>Resumen</button>
+    <button type="button" class="nav-btn" data-vista="ajustes"><i class="bicho" aria-hidden="true">🦅</i>Proyección</button>
   </nav>
 
   <div id="aviso" class="aviso" role="status" hidden>
@@ -186,7 +192,7 @@
 
   <dialog id="bienvenida">
     <form method="dialog" id="bienvenida-form">
-      <h2>Bienvenido 👋</h2>
+      <h2>Bienvenido a Hormiga$to$</h2>
       <p class="nota">Escribe la contraseña que te dieron para anotar tus gastos hablando. Se pide una sola vez en este teléfono.</p>
       <label>Contraseña
         <input name="clave" type="password" autocomplete="off">
