@@ -184,6 +184,21 @@
     </form>
   </dialog>
 
+  <dialog id="bienvenida">
+    <form method="dialog" id="bienvenida-form">
+      <h2>Bienvenido 👋</h2>
+      <p class="nota">Escribe la contraseña que te dieron para anotar tus gastos hablando. Se pide una sola vez en este teléfono.</p>
+      <label>Contraseña
+        <input name="clave" type="password" autocomplete="off">
+      </label>
+      <p id="bienvenida-estado" class="nota" role="status"></p>
+      <div class="editor-botones">
+        <button value="luego" formnovalidate>Ahora no</button>
+        <button value="entrar" class="principal">Entrar</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="confirmar-reinicio">
     <form method="dialog">
       <h2>¿Borrar todos los movimientos?</h2>

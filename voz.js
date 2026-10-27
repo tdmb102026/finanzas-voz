@@ -328,5 +328,32 @@ const Voz = (() => {
   }
   function sinVozNativa() { abrirDialogo(); }
 
+  // Primera vez en un teléfono: pide la contraseña al abrir, sin buscarla en Proyección.
+  async function entrar(e) {
+    e.preventDefault();
+    const f = $('bienvenida-form');
+    if (e.submitter && e.submitter.value === 'luego') {
+      escribir('voz-omitida', '1');
+      $('bienvenida').close();
+      return;
+    }
+    const a = { url: ajustes().url, clave: f.clave.value.trim() };
+    if (document.activeElement) document.activeElement.blur();
+    if (!a.clave) { $('bienvenida-estado').textContent = 'Escribe tu contraseña.'; return; }
+    $('bienvenida-estado').textContent = 'Revisando…';
+    const j = await llamar({ tipo: 'probar' }, a);
+    if (!j.ok) {
+      $('bienvenida-estado').textContent = ERRORES[j.error] || `El servidor respondió con un error (${j.error || 'desconocido'}).`;
+      return;
+    }
+    escribir('voz-url', a.url);
+    escribir('voz-clave', a.clave);
+    $('bienvenida').close();
+    avisar('Listo: ya puedes anotar por voz.');
+    procesarPendientes();
+  }
+  $('bienvenida-form').addEventListener('submit', entrar);
+  if (!configurada() && !leer('voz-omitida')) $('bienvenida').showModal();
+
   return { escuchar, oido, nombreSugerido, sinVozNativa, aprender, procesarPendientes, pintarAjustes, motivo, configurada };
 })();
