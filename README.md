@@ -1,6 +1,6 @@
-# Finanzas en 3 segundos
+# MIG · Hormiga$to$
 
-App para anotar gastos e ingresos en 3 segundos o menos. Funciona en el celular como app web instalable, sin internet, y guarda todo en el teléfono.
+Controla tus finanzas: app para anotar gastos e ingresos en 3 segundos o menos. Funciona en el celular como app web instalable, sin internet, y guarda todo en el teléfono.
 
 ## Qué hace
 

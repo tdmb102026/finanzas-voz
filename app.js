@@ -12,6 +12,24 @@ const TIPOS = {
 };
 
 const $ = id => document.getElementById(id);
+
+// Animalitos: cada tipo y cada concepto tiene siempre el mismo, para reconocerlo sin leer.
+// Los gastos hormiga (Otros) son, claro, la hormiga.
+const ANIMAL_TIPO = { gasto: '🐜', ingreso: '🐝', inversion: '🐿️', libre: '🦋' };
+const ANIMAL_CONCEPTO = {
+  sueldo: '🦁', ganancia: '🦊', ventas: '🐓', comidas: '🐻', despensa: '🐹', gasolina: '🐆',
+  salidas: '🦜', medicina: '🐨', compras: '🦚', amazon: '🐊', luz: '🐞', ahorro: '🐿️',
+  juguetes: '🐼', 'bienes-raices': '🦫', libros: '🦉', otros: '🐜',
+};
+const ANIMALES = ['🐢', '🐬', '🦒', '🐘', '🦓', '🐧', '🦩', '🐇', '🦔', '🐑', '🦌', '🐙', '🦭', '🐫', '🦬',
+  '🐕', '🐈', '🦙', '🐳', '🦅', '🦆', '🐸', '🦎', '🐝', '🦘', '🦡', '🐒', '🦦', '🐌', '🦀'];
+function animal(c) {
+  if (ANIMAL_CONCEPTO[c.id]) return ANIMAL_CONCEPTO[c.id];
+  let h = 0;
+  for (const ch of String(c.id)) h = (h * 31 + ch.codePointAt(0)) >>> 0;
+  return ANIMALES[h % ANIMALES.length];
+}
+const bicho = a => `<i class="bicho" aria-hidden="true">${a}</i>`;
 const estado = {
   tipo: 'gasto',
   entrada: '',        // lo tecleado, p. ej. "1.5"
@@ -90,7 +108,7 @@ function pintarTipo() {
     .filter(c => c.tipo === estado.tipo && !c.oculto)
     .sort((a, b) => (b.usos - a.usos) || (a.orden - b.orden));
   $('conceptos').innerHTML = lista.map(c =>
-    `<button type="button" class="cat" data-concepto="${escapar(c.id)}"><span>${escapar(c.icono)}</span>${escapar(c.nombre)}</button>`
+    `<button type="button" class="cat" data-concepto="${escapar(c.id)}">${bicho(animal(c))}<span>${escapar(c.icono)}</span>${escapar(c.nombre)}</button>`
   ).join('');
 }
 
@@ -198,7 +216,7 @@ async function pintarMovimientos() {
     for (const x of pendientes) {
       const c = x.concepto ? concepto(x.concepto) : { icono: '❓' };
       html += `<li><button type="button" class="mov pendiente" data-id="${x.id}">
-        <span class="mov-icono">${escapar(c.icono)}</span>
+        <span class="mov-icono con-bicho">${escapar(c.icono)}${x.concepto ? bicho(animal(c)) : ''}</span>
         <span class="mov-texto"><strong>«${escapar(x.frase || 'Sin frase')}»</strong><small>${escapar(Voz.motivo(x))}</small></span>
         <span class="mov-monto">${x.monto ? dinero(x.monto) : '$?'}<small>${x.fecha.slice(8, 10)}/${x.fecha.slice(5, 7)}</small></span>
       </button></li>`;
@@ -214,7 +232,7 @@ async function pintarMovimientos() {
     const c = concepto(x.concepto);
     const signo = x.tipo === 'ingreso' ? 1 : -1;
     html += `<li><button type="button" class="mov ${x.tipo}" data-id="${x.id}">
-      <span class="mov-icono">${escapar(c.icono)}</span>
+      <span class="mov-icono con-bicho">${escapar(c.icono)}${bicho(animal(c))}</span>
       <span class="mov-texto"><strong>${escapar(c.nombre)}</strong><small>${escapar(c.categoria)}${x.nota ? ' · ' + escapar(x.nota) : ''}</small></span>
       <span class="mov-monto">${dinero(signo * x.monto)}<small>${x.fecha.slice(11, 16)}</small></span>
     </button></li>`;
@@ -292,7 +310,7 @@ function diferencia(real, ppto, tipo) {
 
 function bloqueTipo(titulo, cats, tipo) {
   if (!cats.length) return '';
-  return `<h2 class="seccion">${titulo}</h2>` + cats.map(cat => `
+  return `<h2 class="seccion">${bicho(ANIMAL_TIPO[tipo])}${titulo}</h2>` + cats.map(cat => `
     <details class="categoria">
       <summary>
         <div class="fila"><strong>${escapar(cat.nombre)}</strong><span>${dinero(cat.real)}<small> de ${dinero(cat.ppto)}</small></span></div>
@@ -300,7 +318,7 @@ function bloqueTipo(titulo, cats, tipo) {
       </summary>
       ${cat.conceptos.map(f => `
         <div class="concepto-fila">
-          <div class="fila"><span>${escapar(f.c.icono)} ${escapar(f.c.nombre)}</span><span>${dinero(f.real)}<small> de ${dinero(f.ppto)}</small></span></div>
+          <div class="fila"><span>${escapar(f.c.icono)} ${escapar(f.c.nombre)} ${bicho(animal(f.c))}</span><span>${dinero(f.real)}<small> de ${dinero(f.ppto)}</small></span></div>
           ${barra(f.real, f.ppto, tipo)}
         </div>`).join('')}
     </details>`).join('');
@@ -368,10 +386,10 @@ async function pintarResumen() {
 
   $('resumen').innerHTML = `
     <div class="totales">
-      <div><span>Ingresos</span><strong class="ingreso">${dinero(ing.real)}</strong><small>Ppto ${dinero(ing.ppto)}</small></div>
-      <div><span>Gastos</span><strong class="gasto">${dinero(egr.real)}</strong><small>Ppto ${dinero(egr.ppto)}</small></div>
-      <div><span>Inversión</span><strong class="inversion">${dinero(inv.real)}</strong><small>Ppto ${dinero(inv.ppto)}</small></div>
-      <div><span>Libre</span><strong class="${libre < 0 ? 'gasto' : ''}">${dinero(libre)}</strong><small>Ppto ${dinero(ing.ppto - egr.ppto - inv.ppto)}</small></div>
+      <div><span>${bicho(ANIMAL_TIPO.ingreso)} Ingresos</span><strong class="ingreso">${dinero(ing.real)}</strong><small>Ppto ${dinero(ing.ppto)}</small></div>
+      <div><span>${bicho(ANIMAL_TIPO.gasto)} Gastos</span><strong class="gasto">${dinero(egr.real)}</strong><small>Ppto ${dinero(egr.ppto)}</small></div>
+      <div><span>${bicho(ANIMAL_TIPO.inversion)} Inversión</span><strong class="inversion">${dinero(inv.real)}</strong><small>Ppto ${dinero(inv.ppto)}</small></div>
+      <div><span>${bicho(ANIMAL_TIPO.libre)} Libre</span><strong class="${libre < 0 ? 'gasto' : ''}">${dinero(libre)}</strong><small>Ppto ${dinero(ing.ppto - egr.ppto - inv.ppto)}</small></div>
     </div>
     ${tarjeta('¿A dónde se fue tu ingreso?', reparto, `Inviertes el ${pctInvertido}% de lo que ganas. Toca la dona para ver cada parte.`)}
     ${tarjeta('Gastos del mes, día a día', curva, `${frase} La línea punteada es el presupuesto repartido parejo en el mes.`)}
@@ -445,10 +463,10 @@ function pintarAjustes() {
   }
   const claves = [...grupos.keys()].sort((a, b) => a.localeCompare(b));
   $('ajustes-lista').innerHTML = claves.map(k => `
-    <h2 class="seccion">${escapar(k)}</h2>
+    <h2 class="seccion">${bicho(ANIMAL_TIPO[grupos.get(k)[0].tipo])}${escapar(k)}</h2>
     <ul class="lista">${grupos.get(k).map(c => `
       <li><button type="button" class="mov" data-concepto="${escapar(c.id)}">
-        <span class="mov-icono">${escapar(c.icono)}</span>
+        <span class="mov-icono con-bicho">${escapar(c.icono)}${bicho(animal(c))}</span>
         <span class="mov-texto"><strong>${escapar(c.nombre)}</strong>${c.oculto ? '<small>Oculto en Anotar</small>' : ''}</span>
         <span class="mov-monto">${dinero(c.presupuesto)}<small>al mes</small></span>
       </button></li>`).join('')}</ul>`).join('');

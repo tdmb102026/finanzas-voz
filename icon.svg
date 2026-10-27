@@ -1,4 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#2563eb"/>
-  <text x="256" y="340" text-anchor="middle" font-family="system-ui, sans-serif" font-size="260" font-weight="700" fill="#ffffff">$</text>
+  <rect width="512" height="512" rx="112" fill="#c2570c"/>
+  <circle cx="256" cy="256" r="196" fill="#d0661a"/>
+  <g fill="none" stroke="#2a1608" stroke-width="13" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M248 318 L222 352 L204 392"/>
+    <path d="M272 322 L272 360 L262 398"/>
+    <path d="M294 316 L320 350 L338 392"/>
+    <path d="M362 236 Q376 190 410 180"/>
+    <path d="M346 232 Q352 186 382 168"/>
+  </g>
+  <g fill="#2a1608">
+    <ellipse cx="170" cy="300" rx="72" ry="56"/>
+    <ellipse cx="238" cy="302" rx="16" ry="12"/>
+    <ellipse cx="275" cy="298" rx="40" ry="30"/>
+    <circle cx="345" cy="266" r="38"/>
+  </g>
+  <circle cx="357" cy="258" r="7" fill="#f6e7d2"/>
+  <g transform="translate(232 178)">
+    <circle r="74" fill="#f6c453" stroke="#2a1608" stroke-width="11"/>
+    <circle r="54" fill="none" stroke="#c98a1c" stroke-width="5"/>
+    <text y="30" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="88" font-weight="700" fill="#2a1608">$</text>
+  </g>
 </svg>
