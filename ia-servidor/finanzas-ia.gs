@@ -57,6 +57,7 @@ function agregarPersona() {
   }
   personas[nombre] = k;
   props.setProperty("PERSONAS", JSON.stringify(personas));
+  hojaDe_("");  // tu fila «Yo» en «Uso», por si aún no está
   hojaDe_(nombre);
   ui.alert(nombre + " agregado. Sus frases se verán en la pestaña «Voz " + nombre + "» y el resumen en «Uso».");
 }
