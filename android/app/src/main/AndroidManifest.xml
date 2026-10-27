@@ -33,6 +33,18 @@
             android:launchMode="singleTask"
             android:noHistory="false" />
 
+        <!-- Botón del panel de arriba: funciona desde la pantalla bloqueada (pide la huella). -->
+        <service
+            android:name=".TileVoz"
+            android:exported="true"
+            android:label="@string/widget_nombre"
+            android:icon="@drawable/tile_hormiga"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
         <receiver
             android:name=".WidgetVoz"
             android:exported="false"

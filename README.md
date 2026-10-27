@@ -24,6 +24,7 @@ En la computadora: `python3 -m http.server` dentro de la carpeta y abre `http://
 
 La carpeta `android/` es una app Android pequeña que abre esta misma app por dentro y agrega lo que una app web no puede:
 un **widget de micrófono** para el panel principal, el acceso directo "Anotar por voz" al mantener presionado el ícono,
+un **botón en el panel de arriba** (junto al Wi-Fi) que se usa con el celular bloqueado (pide la huella),
 el reconocimiento de voz de Google del teléfono y guardar el Excel en Descargas.
 
 GitHub la compila sola (`.github/workflows/apk.yml`) cada vez que cambia `android/` y la deja en

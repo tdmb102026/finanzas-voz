@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Hormiga con cabeza de micrófono en una sola tinta (Android pinta los botones del panel de un color). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="512" android:viewportHeight="512">
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="22" android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M224,336 L198,370 L180,408 M250,340 L250,378 L240,414 M274,334 L300,368 L318,408" />
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M78,318 a70,54 0 1,0 140,0 a70,54 0 1,0 -140,0z M199,320 a15,11 0 1,0 30,0 a15,11 0 1,0 -30,0z M212,316 a40,29 0 1,0 80,0 a40,29 0 1,0 -80,0z" />
+    <group android:rotation="-25" android:pivotX="295" android:pivotY="301">
+        <path android:fillColor="#FFFFFFFF"
+            android:pathData="M290,290 h10 a8,8 0 0,1 8,8 v6 a8,8 0 0,1 -8,8 h-10 a8,8 0 0,1 -8,-8 v-6 a8,8 0 0,1 8,-8z" />
+    </group>
+    <group android:translateX="342" android:translateY="218" android:rotation="-25">
+        <path android:strokeColor="#FFFFFFFF" android:strokeWidth="18" android:strokeLineCap="round"
+            android:pathData="M-14,-66 Q-30,-112 -60,-118 M14,-66 Q16,-116 40,-132" />
+        <path android:fillColor="#FFFFFFFF" android:fillType="evenOdd"
+            android:pathData="M-48,-24 a48,48 0 0,1 96,0 v54 a48,48 0 0,1 -96,0z M-26,-40 h52 v9 h-52z M-32,-18 h64 v9 h-64z M-32,4 h64 v9 h-64z" />
+    </group>
+</vector>
