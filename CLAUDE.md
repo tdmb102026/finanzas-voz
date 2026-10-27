@@ -26,3 +26,4 @@
 - Widget y atajo: imagen `drawable-nodpi/widget_hormiga.png` (hormiga con cabeza de micrófono), sacada de `android/widget-hormiga.svg`. El $ de la marca y de la moneda del logo va en verde (`.dolar`).
 - "Otros" se llama "Gastos hormiga" (id `otros`, ícono 🪙; IndexedDB v5 lo renombra si seguía como "Otros").
 - Proyección → "Cerrar sesión" borra `voz-clave` en el teléfono y vuelve a mostrar la bienvenida. En la hoja, menú "Mostrar contraseñas en «Uso»" llena la columna Contraseña (también al agregar persona o cambiar la tuya).
+- Botón del panel de arriba (`TileVoz`, ícono vectorial `drawable/tile_hormiga.xml`): con el celular bloqueado pide la huella (`unlockAndRun`) y abre `VozActivity`. En Android 13+ la app ofrece agregarlo la primera vez que abre (`requestAddTileService`). Android no permite widgets en la pantalla de bloqueo de teléfonos.

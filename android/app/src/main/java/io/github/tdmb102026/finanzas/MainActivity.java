@@ -1,9 +1,12 @@
 package io.github.tdmb102026.finanzas;
 
 import android.app.Activity;
+import android.app.StatusBarManager;
+import android.content.ComponentName;
 import android.content.ActivityNotFoundException;
 import android.content.ContentValues;
 import android.content.Intent;
+import android.graphics.drawable.Icon;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -38,6 +41,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle guardado) {
         super.onCreate(guardado);
+        ofrecerBotonPanel();
         web = new WebView(this);
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
@@ -157,5 +161,19 @@ public class MainActivity extends Activity {
         private void aviso(String texto) {
             runOnUiThread(() -> Toast.makeText(MainActivity.this, texto, Toast.LENGTH_LONG).show());
         }
+    }
+
+    // La primera vez, Android 13+ pregunta si agregar el botón de la hormiga al panel de arriba.
+    private void ofrecerBotonPanel() {
+        if (Build.VERSION.SDK_INT < 33) return;
+        android.content.SharedPreferences p = getSharedPreferences("app", MODE_PRIVATE);
+        if (p.getBoolean("panel-ofrecido", false)) return;
+        p.edit().putBoolean("panel-ofrecido", true).apply();
+        StatusBarManager barra = getSystemService(StatusBarManager.class);
+        if (barra == null) return;
+        barra.requestAddTileService(new ComponentName(this, TileVoz.class),
+                getString(R.string.widget_nombre),
+                Icon.createWithResource(this, R.drawable.tile_hormiga),
+                getMainExecutor(), r -> { });
     }
 }
