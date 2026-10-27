@@ -23,3 +23,6 @@
 - Marca (2026-10-27): ícono en el celular "MIG", nombre completo "Hormiga$to$ · Controla tus finanzas". Logo `icon.svg` (hormiga con moneda, fondo naranja); los PNG (web y mipmaps de Android) se sacan de ahí con Playwright. Colores: crema/café/naranja miel de día, verde bosque de noche, hojitas tenues de fondo (`--hojas`). fer pidió diseño serio, no muy animado.
 - Animalitos sutiles (`ANIMAL_TIPO`, `ANIMAL_CONCEPTO`, `animal(c)` en app.js): siempre el mismo animal por tipo y concepto (Otros = hormiga); conceptos nuevos toman uno fijo según su id. Los emojis de los conceptos se mantienen.
 - Primera vez en un teléfono sin contraseña: diálogo «Bienvenido» que la pide (o "Ahora no", guarda `voz-omitida`).
+- Widget y atajo: imagen `drawable-nodpi/widget_hormiga.png` (hormiga con cabeza de micrófono), sacada de `android/widget-hormiga.svg`. El $ de la marca y de la moneda del logo va en verde (`.dolar`).
+- "Otros" se llama "Gastos hormiga" (id `otros`, ícono 🪙; IndexedDB v5 lo renombra si seguía como "Otros").
+- Proyección → "Cerrar sesión" borra `voz-clave` en el teléfono y vuelve a mostrar la bienvenida. En la hoja, menú "Mostrar contraseñas en «Uso»" llena la columna Contraseña (también al agregar persona o cambiar la tuya).

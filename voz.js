@@ -49,7 +49,18 @@ const Voz = (() => {
     f.url.value = a.url;
     f.clave.value = a.clave;
     $('voz-estado').textContent = configurada() ? 'Lista en este teléfono.' : 'Escribe la contraseña de la app y toca Guardar y probar.';
+    $('cerrar-sesion').hidden = !configurada();
   }
+
+  // Cerrar sesión: olvida la contraseña en este teléfono y la vuelve a pedir.
+  // Los movimientos y lo aprendido se quedan.
+  $('cerrar-sesion').addEventListener('click', () => {
+    try { localStorage.removeItem('voz-clave'); localStorage.removeItem('voz-omitida'); } catch { /* sin almacenamiento */ }
+    pintarAjustes();
+    $('bienvenida-form').clave.value = '';
+    $('bienvenida-estado').textContent = '';
+    $('bienvenida').showModal();
+  });
 
   async function guardarAjustes(e) {
     e.preventDefault();

@@ -18,6 +18,6 @@
   <g transform="translate(232 178)">
     <circle r="74" fill="#f6c453" stroke="#2a1608" stroke-width="11"/>
     <circle r="54" fill="none" stroke="#c98a1c" stroke-width="5"/>
-    <text y="30" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="88" font-weight="700" fill="#2a1608">$</text>
+    <text y="30" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="88" font-weight="700" fill="#047857">$</text>
   </g>
 </svg>

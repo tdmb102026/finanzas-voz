@@ -3,7 +3,7 @@
     <shortcut
         android:shortcutId="voz"
         android:enabled="true"
-        android:icon="@drawable/atajo_mic"
+        android:icon="@drawable/widget_hormiga"
         android:shortcutShortLabel="@string/atajo_voz_corto"
         android:shortcutLongLabel="@string/atajo_voz">
         <intent

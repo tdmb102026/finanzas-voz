@@ -17,7 +17,7 @@
     <section id="vista-anotar" class="vista activa">
       <header class="marca-app">
         <img src="icon.svg" alt="">
-        <strong>Hormiga$to$</strong>
+        <strong>Hormiga<span class="dolar">$</span>to<span class="dolar">$</span></strong>
         <small>· Controla tus finanzas</small>
       </header>
       <div class="tipo" role="radiogroup" aria-label="Tipo">
@@ -89,6 +89,7 @@
         <button class="boton-ancho">Guardar y probar</button>
         <p id="voz-estado" class="nota" role="status"></p>
       </form>
+      <button type="button" id="cerrar-sesion" class="boton-ancho peligro" hidden>Cerrar sesión</button>
       <h1 class="titulo">Exportar</h1>
       <p class="nota">Descarga todos los movimientos con las columnas de tu Excel: Fecha, Mes, Tipo, Categoria, Concepto, Presupuesto, Monto.</p>
       <button type="button" id="exportar" class="boton-ancho">Descargar CSV para Excel</button>
@@ -192,7 +193,7 @@
 
   <dialog id="bienvenida">
     <form method="dialog" id="bienvenida-form">
-      <h2>Bienvenido a Hormiga$to$</h2>
+      <h2>Bienvenido a Hormiga<span class="dolar">$</span>to<span class="dolar">$</span></h2>
       <p class="nota">Escribe la contraseña que te dieron para anotar tus gastos hablando. Se pide una sola vez en este teléfono.</p>
       <label>Contraseña
         <input name="clave" type="password" autocomplete="off">

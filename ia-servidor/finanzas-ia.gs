@@ -18,6 +18,7 @@ function onOpen() {
     .addItem("Guardar clave de Anthropic", "guardarClaveAnthropic")
     .addItem("Guardar contraseña de la app", "guardarContrasena")
     .addItem("Agregar otra persona", "agregarPersona")
+    .addItem("Mostrar contraseñas en «Uso»", "mostrarContrasenas")
     .addToUi();
 }
 function guardarClaveAnthropic() {
@@ -36,6 +37,7 @@ function guardarContrasena() {
   const k = r.getResponseText().trim();
   if (k.length < 6) return ui.alert("Usa al menos 6 letras o números.");
   PropertiesService.getScriptProperties().setProperty("APP_CLAVE", k);
+  mostrarContrasenas();
   ui.alert("Contraseña guardada.");
 }
 
@@ -59,6 +61,7 @@ function agregarPersona() {
   props.setProperty("PERSONAS", JSON.stringify(personas));
   hojaDe_("");  // tu fila «Yo» en «Uso», por si aún no está
   hojaDe_(nombre);
+  mostrarContrasenas();
   ui.alert(nombre + " agregado. Sus frases se verán en la pestaña «Voz " + nombre + "» y el resumen en «Uso».");
 }
 function personas_() {
@@ -103,6 +106,19 @@ function hojaDe_(persona) {
   return h;
 }
 
+// Columna «Contraseña» en «Uso», para tenerlas a mano. Ojo: quien vea la hoja las ve.
+function mostrarContrasenas() {
+  const uso = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Uso");
+  if (!uso) return;
+  const personas = personas_();
+  const mia = PropertiesService.getScriptProperties().getProperty("APP_CLAVE") || "";
+  uso.getRange(1, 7).setValue("Contraseña").setFontWeight("bold");
+  const n = uso.getLastRow();
+  if (n < 2) return;
+  const nombres = uso.getRange(2, 1, n - 1, 1).getValues();
+  uso.getRange(2, 7, n - 1, 1).setValues(nombres.map(([x]) => [x === "Yo" ? mia : (personas[x] || "")]));
+}
+
 // Cada frase queda anotada en la pestaña de quien la dijo: sirve para ver qué entendió la IA y cuánto gasta.
 function anotarHoja_(persona, frase, resultado, uso) {
   try {
@@ -118,8 +134,8 @@ Reglas:
 - Una frase puede traer varios movimientos ("30 en el súper y 10 de gasolina"): devuelve uno por cada monto.
 - concepto: el id de la lista que mejor encaje. Ejemplos: súper, mercado o víveres → despensa; almuerzo, restaurante,
   cualquier comida o bebida (colada morada, encebollado, bolón, fritada, café, jugo, cola) → comidas; luz eléctrica → luz.
-  Si ningún concepto encaja (por ejemplo un juguete, un regalo o algo suelto), usa el concepto llamado "Otros"
-  del mismo tipo si existe, con seguro en true si el monto está claro. Si no hay "Otros", elige el más cercano y pon seguro en false.
+  Si ningún concepto encaja (por ejemplo un juguete, un regalo o algo suelto), usa el concepto llamado "Gastos hormiga"
+  (u "Otros") del mismo tipo si existe, con seguro en true si el monto está claro. Si no hay, elige el más cercano y pon seguro en false.
 - Si hay "ejemplos corregidos por la persona", síguelos: muestran cómo clasifica ella sus gastos.
 - monto: el número en dólares. Si la frase no dice un monto, pon 0 y seguro en false.
 - dias_atras: 0 si es de hoy o no lo dice; 1 si dice "ayer"; 2 si dice "anteayer"; para un día de la semana, cuántos días han pasado desde ese día.
