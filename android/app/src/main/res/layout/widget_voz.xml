@@ -7,8 +7,6 @@
         android:layout_width="56dp"
         android:layout_height="56dp"
         android:layout_gravity="center"
-        android:background="@drawable/circulo"
-        android:padding="14dp"
-        android:src="@drawable/mic"
+        android:src="@drawable/widget_hormiga"
         android:contentDescription="@string/widget_nombre" />
 </FrameLayout>

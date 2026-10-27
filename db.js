@@ -1,6 +1,6 @@
 // Guardado local en el teléfono (IndexedDB). Funciona sin internet.
 const DB = (() => {
-  const NOMBRE = 'finanzas', VERSION = 4;
+  const NOMBRE = 'finanzas', VERSION = 5;
 
   // Conceptos iniciales, tomados del Excel de fer. Presupuesto mensual en centavos.
   const CONCEPTOS_INICIALES = [
@@ -14,7 +14,7 @@ const DB = (() => {
     ['medicina', 'Medicina', 'gasto', 'Gastos', 10000, '💊'],
     ['compras', 'Compras', 'gasto', 'Gastos', 5000, '🛍️'],
     ['amazon', 'Amazon', 'gasto', 'Gastos', 10000, '📦'],
-    ['otros', 'Otros', 'gasto', 'Gastos', 0, '📌'],
+    ['otros', 'Gastos hormiga', 'gasto', 'Gastos', 0, '🪙'],
     ['luz', 'Luz', 'gasto', 'Servicios', 2000, '💡'],
     ['ahorro', 'Ahorro', 'inversion', 'Ahorro', 0, '🐷'],
     ['juguetes', 'Juguetes', 'inversion', 'Inversiones', 80000, '🧸'],
@@ -63,6 +63,15 @@ const DB = (() => {
     };
   }
 
+  // Versión 5: "Otros" pasa a llamarse "Gastos hormiga" (si no lo renombraste tú).
+  function aGastosHormiga(tx) {
+    const conceptos = tx.objectStore('conceptos');
+    conceptos.get('otros').onsuccess = ev => {
+      const c = ev.target.result;
+      if (c && c.nombre === 'Otros') conceptos.put({ ...c, nombre: 'Gastos hormiga', icono: c.icono === '📌' ? '🪙' : c.icono });
+    };
+  }
+
   let conexion;
 
   function abrir() {
@@ -91,6 +100,7 @@ const DB = (() => {
         }
         if (e.oldVersion === 2) aInversion(tx);
         if (e.oldVersion >= 2 && e.oldVersion < 4) agregarOtros(tx);
+        if (e.oldVersion === 4) aGastosHormiga(tx);
       };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);

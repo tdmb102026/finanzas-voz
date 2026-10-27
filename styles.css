@@ -476,6 +476,7 @@ dialog textarea { resize: none; user-select: text; }
 .marca-app img { width: 26px; height: 26px; border-radius: 7px; }
 .marca-app strong { font-size: 16px; letter-spacing: -0.01em; }
 .marca-app small { color: var(--suave); font-size: 12px; }
+.dolar { color: var(--ingreso); }
 
 /* Un animal chiquito en una insignia, como los usuarios anónimos de Google Drive. Sutil a propósito. */
 .bicho {
