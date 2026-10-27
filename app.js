@@ -108,7 +108,7 @@ function pintarTipo() {
     .filter(c => c.tipo === estado.tipo && !c.oculto)
     .sort((a, b) => (b.usos - a.usos) || (a.orden - b.orden));
   $('conceptos').innerHTML = lista.map(c =>
-    `<button type="button" class="cat" data-concepto="${escapar(c.id)}">${bicho(animal(c))}<span>${escapar(c.icono)}</span>${escapar(c.nombre)}</button>`
+    `<button type="button" class="cat" data-concepto="${escapar(c.id)}"><span>${escapar(c.icono)}</span>${escapar(c.nombre)}</button>`
   ).join('');
 }
 
@@ -672,7 +672,8 @@ function seguirAtras() {
 
 addEventListener('popstate', () => {
   const abierta = [...document.querySelectorAll('dialog[open]')].pop();
-  if (abierta) abierta.close();
+  // La de la contraseña no se cierra: sin contraseña no se usa la app.
+  if (abierta) { if (abierta.id !== 'bienvenida') abierta.close(); }
   else if (estado.vista !== 'anotar') mostrar('anotar');
   seguirAtras();
 });

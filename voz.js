@@ -55,7 +55,7 @@ const Voz = (() => {
   // Cerrar sesión: olvida la contraseña en este teléfono y la vuelve a pedir.
   // Los movimientos y lo aprendido se quedan.
   $('cerrar-sesion').addEventListener('click', () => {
-    try { localStorage.removeItem('voz-clave'); localStorage.removeItem('voz-omitida'); } catch { /* sin almacenamiento */ }
+    try { localStorage.removeItem('voz-clave'); } catch { /* sin almacenamiento */ }
     pintarAjustes();
     $('bienvenida-form').clave.value = '';
     $('bienvenida-estado').textContent = '';
@@ -343,11 +343,6 @@ const Voz = (() => {
   async function entrar(e) {
     e.preventDefault();
     const f = $('bienvenida-form');
-    if (e.submitter && e.submitter.value === 'luego') {
-      escribir('voz-omitida', '1');
-      $('bienvenida').close();
-      return;
-    }
     const a = { url: ajustes().url, clave: f.clave.value.trim() };
     if (document.activeElement) document.activeElement.blur();
     if (!a.clave) { $('bienvenida-estado').textContent = 'Escribe tu contraseña.'; return; }
@@ -364,7 +359,11 @@ const Voz = (() => {
     procesarPendientes();
   }
   $('bienvenida-form').addEventListener('submit', entrar);
-  if (!configurada() && !leer('voz-omitida')) $('bienvenida').showModal();
+  // Sin contraseña no se usa la app: la ventana no se cierra con Atrás ni Esc. Ya guardada, no se vuelve
+  // a pedir hasta que la persona toque Cerrar sesión.
+  $('bienvenida').addEventListener('cancel', e => e.preventDefault());
+  $('bienvenida').addEventListener('close', () => { if (!configurada()) $('bienvenida').showModal(); });
+  if (!configurada()) $('bienvenida').showModal();
 
   return { escuchar, oido, nombreSugerido, sinVozNativa, aprender, procesarPendientes, pintarAjustes, motivo, configurada };
 })();
