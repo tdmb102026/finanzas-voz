@@ -9,12 +9,15 @@
 const MODELO = "claude-haiku-5-5";
 const HOJA = "Voz";
 const TITULOS = ["Fecha", "Frase", "Resultado", "Tokens entrada", "Tokens salida"];
+// Precio de Haiku 5.5 en dólares por millón de tokens (entrada, salida), para la pestaña «Uso».
+const PRECIO = [0.10, 0.50];
 
 // ---------- menú de la hoja ----------
 function onOpen() {
   SpreadsheetApp.getUi().createMenu("Finanzas IA")
     .addItem("Guardar clave de Anthropic", "guardarClaveAnthropic")
     .addItem("Guardar contraseña de la app", "guardarContrasena")
+    .addItem("Agregar otra persona", "agregarPersona")
     .addToUi();
 }
 function guardarClaveAnthropic() {
@@ -36,16 +39,73 @@ function guardarContrasena() {
   ui.alert("Contraseña guardada.");
 }
 
-// Cada frase queda anotada en la pestaña «Voz»: sirve para ver qué entendió la IA y cuánto gasta.
-function anotarHoja_(frase, resultado, uso) {
+// Otra persona con su propia contraseña: sus frases van a su pestaña «Voz Nombre».
+function agregarPersona() {
+  const ui = SpreadsheetApp.getUi();
+  const n = ui.prompt("Agregar persona", "¿Cómo se llama? (por ejemplo Juan)", ui.ButtonSet.OK_CANCEL);
+  if (n.getSelectedButton() !== ui.Button.OK) return;
+  const nombre = n.getResponseText().trim().replace(/[^\wáéíóúñÁÉÍÓÚÑ ]/g, "").slice(0, 30);
+  if (!nombre) return ui.alert("Escribe un nombre.");
+  const r = ui.prompt("Contraseña de " + nombre, "Invéntale una contraseña distinta a la tuya. La escribirá en su app, en Proyección → Anotar por voz.", ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  const k = r.getResponseText().trim();
+  if (k.length < 6) return ui.alert("Usa al menos 6 letras o números.");
+  const props = PropertiesService.getScriptProperties();
+  const personas = personas_();
+  if (k === props.getProperty("APP_CLAVE") || Object.keys(personas).some(x => personas[x] === k && x !== nombre)) {
+    return ui.alert("Esa contraseña ya la usa otra persona. Elige otra.");
+  }
+  personas[nombre] = k;
+  props.setProperty("PERSONAS", JSON.stringify(personas));
+  hojaDe_(nombre);
+  ui.alert(nombre + " agregado. Sus frases se verán en la pestaña «Voz " + nombre + "» y el resumen en «Uso».");
+}
+function personas_() {
+  try { return JSON.parse(PropertiesService.getScriptProperties().getProperty("PERSONAS") || "{}"); } catch (e) { return {}; }
+}
+// Quién manda la frase según la contraseña: "" es el dueño (pestaña «Voz»), null si no es de nadie.
+function quien_(clave) {
+  if (!clave) return null;
+  if (clave === PropertiesService.getScriptProperties().getProperty("APP_CLAVE")) return "";
+  const personas = personas_();
+  return Object.keys(personas).find(n => personas[n] === clave) ?? null;
+}
+
+// La pestaña de cada persona, y su fila en «Uso» con fórmulas que cuentan frases y costo.
+function hojaDe_(persona) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const nombre = persona ? HOJA + " " + persona : HOJA;
+  let h = ss.getSheetByName(nombre);
+  if (!h) {
+    h = ss.insertSheet(nombre);
+    h.appendRow(TITULOS); h.setFrozenRows(1); h.getRange(1, 1, 1, TITULOS.length).setFontWeight("bold");
+  }
+  let uso = ss.getSheetByName("Uso");
+  if (!uso) {
+    uso = ss.insertSheet("Uso");
+    uso.appendRow(["Persona", "Frases", "Tokens entrada", "Tokens salida", "Costo aprox. ($)", "Costo por frase ($)"]);
+    uso.setFrozenRows(1); uso.getRange(1, 1, 1, 6).setFontWeight("bold");
+  }
+  const quien = persona || "Yo";
+  const filas = uso.getRange(1, 1, uso.getLastRow(), 1).getValues().map(f => f[0]);
+  if (!filas.includes(quien)) {
+    const r = uso.getLastRow() + 1, t = "'" + nombre + "'!";
+    uso.getRange(r, 1).setValue(quien);
+    uso.getRange(r, 2, 1, 5).setFormulas([[
+      "=COUNTA(" + t + "B2:B)",
+      "=SUM(" + t + "D2:D)",
+      "=SUM(" + t + "E2:E)",
+      "=ROUND(C" + r + "*" + PRECIO[0] + "/1000000+D" + r + "*" + PRECIO[1] + "/1000000, 4)",
+      "=IF(B" + r + ">0, ROUND(E" + r + "/B" + r + ", 5), 0)",
+    ]]);
+  }
+  return h;
+}
+
+// Cada frase queda anotada en la pestaña de quien la dijo: sirve para ver qué entendió la IA y cuánto gasta.
+function anotarHoja_(persona, frase, resultado, uso) {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    let h = ss.getSheetByName(HOJA);
-    if (!h) {
-      h = ss.insertSheet(HOJA);
-      h.appendRow(TITULOS); h.setFrozenRows(1); h.getRange(1, 1, 1, TITULOS.length).setFontWeight("bold");
-    }
-    h.appendRow([new Date(), frase, JSON.stringify(resultado), (uso || {}).input_tokens || 0, (uso || {}).output_tokens || 0]);
+    hojaDe_(persona).appendRow([new Date(), frase, JSON.stringify(resultado), (uso || {}).input_tokens || 0, (uso || {}).output_tokens || 0]);
   } catch (err) { /* si la hoja falla, la respuesta a la app sigue */ }
 }
 
@@ -131,14 +191,14 @@ function doGet() { return json_({ ok: true, servicio: "finanzas-ia" }); }
 function doPost(e) {
   try {
     const q = JSON.parse(e.postData.contents);
-    const clave = PropertiesService.getScriptProperties().getProperty("APP_CLAVE");
-    if (!clave || String(q.clave || "") !== clave) return json_({ ok: false, error: "contraseña" });
+    const persona = quien_(String(q.clave || ""));
+    if (persona === null) return json_({ ok: false, error: "contraseña" });
     if (q.tipo === "probar") return json_({ ok: true });
     const frase = String(q.frase || "").trim().slice(0, 500);
     const conceptos = conceptos_(q.conceptos);
     if (!frase || !conceptos.length) return json_({ ok: false, error: "pedido" });
     const r = claude_(frase, conceptos, String(q.hoy || "").slice(0, 40), ejemplos_(q.ejemplos, conceptos.map(c => c.id)));
-    anotarHoja_(frase, r.ok ? r.movimientos : r, r.uso);
+    anotarHoja_(persona, frase, r.ok ? r.movimientos : r, r.uso);
     delete r.uso;
     return json_(r);
   } catch (err) {
