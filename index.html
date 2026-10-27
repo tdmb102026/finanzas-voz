@@ -28,20 +28,20 @@
 
       <output id="monto" class="monto" aria-live="polite">$0</output>
       <p id="ayuda" class="ayuda">Escribe el monto y luego toca el concepto</p>
-      <button type="button" id="voz" class="voz-btn">🎤 Anotar por voz</button>
+      <button type="button" id="voz" class="voz-btn" aria-label="Anotar por voz" title="Anotar por voz"><img src="mic-hormiga.svg" alt="" width="64" height="64"></button>
 
       <div class="teclado" id="teclado">
-        <button type="button" data-k="1">1<i class="bicho" aria-hidden="true">🦄</i></button>
-        <button type="button" data-k="2">2<i class="bicho" aria-hidden="true">🦆</i></button>
-        <button type="button" data-k="3">3<i class="bicho" aria-hidden="true">🦥</i></button>
-        <button type="button" data-k="4">4<i class="bicho" aria-hidden="true">🐢</i></button>
-        <button type="button" data-k="5">5<i class="bicho" aria-hidden="true">🐠</i></button>
-        <button type="button" data-k="6">6<i class="bicho" aria-hidden="true">🐜</i></button>
-        <button type="button" data-k="7">7<i class="bicho" aria-hidden="true">🐞</i></button>
-        <button type="button" data-k="8">8<i class="bicho" aria-hidden="true">🐙</i></button>
-        <button type="button" data-k="9">9<i class="bicho" aria-hidden="true">🐈</i></button>
+        <button type="button" data-k="1">1</button>
+        <button type="button" data-k="2">2</button>
+        <button type="button" data-k="3">3</button>
+        <button type="button" data-k="4">4</button>
+        <button type="button" data-k="5">5</button>
+        <button type="button" data-k="6">6</button>
+        <button type="button" data-k="7">7</button>
+        <button type="button" data-k="8">8</button>
+        <button type="button" data-k="9">9</button>
         <button type="button" data-k=".">.</button>
-        <button type="button" data-k="0">0<i class="bicho" aria-hidden="true">🐌</i></button>
+        <button type="button" data-k="0">0</button>
         <button type="button" data-k="borrar" aria-label="Borrar">⌫</button>
       </div>
 
@@ -194,13 +194,12 @@
   <dialog id="bienvenida">
     <form method="dialog" id="bienvenida-form">
       <h2>Bienvenido a Hormiga<span class="dolar">$</span>to<span class="dolar">$</span></h2>
-      <p class="nota">Escribe la contraseña que te dieron para anotar tus gastos hablando. Se pide una sola vez en este teléfono.</p>
+      <p class="nota">Escribe la contraseña que te dieron para usar la app. Se pide una sola vez en este teléfono; solo vuelve a pedirse si cierras sesión.</p>
       <label>Contraseña
         <input name="clave" type="password" autocomplete="off">
       </label>
       <p id="bienvenida-estado" class="nota" role="status"></p>
       <div class="editor-botones">
-        <button value="luego" formnovalidate>Ahora no</button>
         <button value="entrar" class="principal">Entrar</button>
       </div>
     </form>

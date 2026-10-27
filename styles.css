@@ -413,15 +413,15 @@ dialog label.check input { width: auto; margin: 0; }
 /* ---------- Voz ---------- */
 .voz-btn {
   align-self: center;
-  border: 1px solid var(--acento);
+  border: none;
   background: none;
-  color: var(--acento);
-  border-radius: 999px;
-  padding: 8px 18px;
-  font-weight: 600;
+  padding: 0;
   margin-bottom: 8px;
+  border-radius: 50%;
+  line-height: 0;
 }
-.voz-btn:active { background: var(--tecla); }
+.voz-btn img { display: block; width: 64px; height: 64px; }
+.voz-btn:active { transform: scale(0.94); }
 .mic {
   display: block;
   margin: 8px auto 0;
@@ -496,10 +496,7 @@ dialog textarea { resize: none; user-select: text; }
 .con-bicho { position: relative; display: inline-block; }
 .con-bicho .bicho { position: absolute; right: -7px; bottom: -4px; box-shadow: 0 0 0 2px var(--fondo); }
 .cat { position: relative; }
-.cat .bicho { position: absolute; top: 5px; right: 5px; }
-.cat span.bicho { font-size: 10px; }
 .teclado button { position: relative; }
-.teclado .bicho { position: absolute; top: 5px; right: 6px; width: 15px; height: 15px; font-size: 9px; opacity: 0.55; background: none; }
 .tipo-btn .bicho { width: auto; height: auto; background: none; margin-right: 4px; font-size: 12px; vertical-align: 1px; }
 .nav-btn .bicho { display: block; margin: 0 auto 2px; background: none; width: auto; height: 14px; font-size: 12px; opacity: 0.7; }
 .seccion .bicho { margin-right: 6px; vertical-align: -3px; text-transform: none; }
