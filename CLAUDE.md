@@ -19,3 +19,4 @@
 - Mientras haya frases en "enviando" (el widget las ordena por detrás), la app repinta cada 3 s y reenvía las que pasan de 60 s. Un concepto sin movimientos se puede borrar; con movimientos solo ocultar.
 - Proyección → "Empezar de cero" borra todos los movimientos (con confirmación y Deshacer); conceptos, presupuestos y `voz-ejemplos` se quedan. Cada mes ya se calcula aparte, desde cero.
 - Presupuesto por mes: cada concepto tiene `historial` {"AAAA-MM": centavos} con el mes desde el que rige cada monto ("0000-00" = lo que tenía antes). Cambiarlo en Proyección rige desde el mes actual; `presupuestoEn(c, mes)` da el de cada mes (Resumen y exportación).
+- Varias personas: propiedad del script `PERSONAS` = {"Nombre": "contraseña"} (menú "Agregar otra persona"); `APP_CLAVE` es fer. Cada una anota en «Voz Nombre» (fer en «Voz») y la pestaña «Uso» tiene fórmulas con frases, tokens y costo por persona (`PRECIO` en el .gs).

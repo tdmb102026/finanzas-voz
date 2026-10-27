@@ -43,3 +43,11 @@ Usa **Implementar → Gestionar implementaciones → editar (lápiz) → Versió
 
 `MODELO` al inicio del script. Por defecto `claude-haiku-5-5` (el más barato). Si entiende mal las frases, cambiarlo a
 `claude-sonnet-5-5` (unos 20 veces más caro, igual menos de un centavo por frase) y publicar una nueva versión.
+
+## Otra persona (por ejemplo un familiar)
+
+1. En la hoja: menú **Finanzas IA → Agregar otra persona**. Escribe su nombre y una contraseña distinta a la tuya.
+2. Esa persona instala la app y pone esa contraseña en Proyección → Anotar por voz.
+3. Sus frases quedan en la pestaña «Voz Nombre». La pestaña «Uso» cuenta las frases, los tokens y el costo aproximado de cada uno.
+
+Todo se cobra a la misma clave de Anthropic. Para quitarle el acceso, borra la propiedad `PERSONAS` en Configuración del proyecto → Propiedades del script (o cámbiala).
