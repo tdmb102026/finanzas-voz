@@ -1,12 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- La hormiga llena el espacio del widget (sin deformarse), así crece al estirarlo. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:padding="4dp">
     <ImageView
         android:id="@+id/mic"
-        android:layout_width="56dp"
-        android:layout_height="56dp"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
         android:layout_gravity="center"
+        android:scaleType="fitCenter"
+        android:adjustViewBounds="true"
         android:src="@drawable/widget_hormiga"
         android:contentDescription="@string/widget_nombre" />
 </FrameLayout>
