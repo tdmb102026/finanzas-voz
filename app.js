@@ -135,10 +135,9 @@ function elegirEspacio(esp) {
 
 // Fila de arriba: Personal y cada negocio. Solo aparece cuando hay al menos un negocio.
 async function pintarEspacios() {
-  const hay = estado.negocios.length > 0;
-  document.body.classList.toggle('con-negocios', hay);
-  $('espacios').hidden = !hay;
-  if (!hay) return;
+  // Siempre visible: Personal, los negocios y "+ Negocio" (mientras haya menos de 3).
+  document.body.classList.add('con-negocios');
+  $('espacios').hidden = false;
   // Frases por revisar de los otros espacios, para que no se pierdan de vista.
   const pend = {};
   for (const x of await DB.todos()) if (x.estado === 'pendiente') pend[negocioDe(x)] = (pend[negocioDe(x)] || 0) + 1;
@@ -146,7 +145,8 @@ async function pintarEspacios() {
       data-espacio="${escapar(id)}"${id !== estado.espacio && pend[id] ? ` data-cuenta="${pend[id]}"` : ''}>
       ${icono}${escapar(nombre)}</button>`;
   $('espacios').innerHTML = chip('', '<span>🐜</span>', 'Personal')
-    + estado.negocios.map(n => chip(n.id, imgPersonaje(n), n.nombre)).join('');
+    + estado.negocios.map(n => chip(n.id, imgPersonaje(n), n.nombre)).join('')
+    + (estado.negocios.length < MAX_NEGOCIOS ? '<button type="button" class="espacio nuevo-negocio" id="chip-nuevo-negocio">＋ Negocio</button>' : '');
 }
 
 // La app Android guarda la lista de negocios para que cada widget sepa a cuál anota.
@@ -382,7 +382,7 @@ function bloqueTipo(titulo, cats, tipo) {
         ${barra(cat.real, cat.ppto, tipo)}
       </summary>
       ${cat.conceptos.map(f => `
-        <div class="concepto-fila">
+        <div class="concepto-fila" data-concepto="${escapar(f.c.id)}" role="button" tabindex="0">
           <div class="fila"><span>${escapar(f.c.icono)} ${escapar(f.c.nombre)} ${bicho(animal(f.c))}</span><span>${dinero(f.real)}<small> de ${dinero(f.ppto)}</small></span></div>
           ${barra(f.real, f.ppto, tipo)}
         </div>`).join('')}
@@ -457,6 +457,8 @@ async function pintarResumen() {
       <div><span>${bicho(ANIMAL_TIPO.inversion)} ${nom.inversiones}</span><strong class="inversion">${dinero(inv.real)}</strong><small>Ppto ${dinero(inv.ppto)}</small></div>
       <div><span>${bicho(ANIMAL_TIPO.libre)} ${nom.libre}</span><strong class="${libre < 0 ? 'gasto' : ''}">${dinero(libre)}</strong><small>Ppto ${dinero(ing.ppto - egr.ppto - inv.ppto)}</small></div>
     </div>
+    <section class="tarjeta"><h2>Historial de meses</h2><div id="historial"></div>
+      <p class="nota">Toca un mes para verlo. En cada mes puedes tocar un concepto (abajo) para corregir su presupuesto.</p></section>
     ${estado.espacio
       ? tarjeta('¿A dónde se fueron las ventas?', reparto, `Las compras de mercadería son el ${pctInvertido}% de lo vendido. Toca la dona para ver cada parte.`)
       : tarjeta('¿A dónde se fue tu ingreso?', reparto, `Inviertes el ${pctInvertido}% de lo que ganas. Toca la dona para ver cada parte.`)}
@@ -468,79 +470,92 @@ async function pintarResumen() {
     ${bloqueTipo(`${nom.inversiones} por categoría`, g.inversion, 'inversion')}
     ${bloqueTipo(`${nom.ingresos} por categoría`, g.ingreso, 'ingreso')}`;
   Graficos.activar($('resumen'));
+  pintarHistorial();
+}
+
+// Los últimos 12 meses con movimientos: entró, salió y lo que quedó. Tocar uno lo abre.
+async function pintarHistorial() {
+  const hoy = new Date();
+  const desde = new Date(hoy.getFullYear(), hoy.getMonth() - 11, 1);
+  const movs = listos(await DB.entre(fechaLocal(desde), rangoMes(hoy)[1])).filter(x => delEspacio(x));
+  const nom = nombres();
+  const filas = [];
+  for (let k = 0; k < 12; k++) {
+    const f = new Date(hoy.getFullYear(), hoy.getMonth() - k, 1);
+    const clave = mesDe(f);
+    const del = movs.filter(x => x.fecha.startsWith(clave));
+    if (!del.length && k) continue;
+    const t = tipo => del.filter(x => x.tipo === tipo).reduce((s, x) => s + x.monto, 0);
+    const libre = t('ingreso') - t('gasto') - t('inversion');
+    const visto = clave === mesDe(estado.mes);
+    filas.push(`<button type="button" class="hist-fila${visto ? ' visto' : ''}" data-mes="${clave}">
+      <span>${MESES[f.getMonth()].replace(/^./, l => l.toUpperCase())} ${f.getFullYear() !== hoy.getFullYear() ? f.getFullYear() : ''}</span>
+      <span class="ingreso">+${dinero(t('ingreso'))}</span>
+      <span class="gasto">−${dinero(t('gasto') + t('inversion'))}</span>
+      <strong class="${libre < 0 ? 'critico' : ''}">${dinero(libre)}</strong></button>`);
+  }
+  $('historial').innerHTML = `<div class="hist-fila cabeza"><span>Mes</span><span>Entró</span><span>Salió</span><span>${nom.libre}</span></div>` + filas.join('');
 }
 
 // ---------- Proyección ----------
 
-// Proyección en tres preguntas simples: ¿cuánto llevo?, ¿cómo cierro el mes?, ¿mi plan cuadra?
-// Abajo, los presupuestos por tipo (plegables). Lo demás (negocios, sesión, exportar) va en Ajustes.
-const DIAS_PARA_PROYECTAR = 7;  // antes de esto, multiplicar lo gastado da números sin sentido
-
+// Proyección del mes actual, en palabras simples: un medidor por tipo ("llevas X de Y") y, al final,
+// cuánto te quedaría al cerrar el mes si se cumple lo que esperas.
 async function pintarProyeccion() {
   const hoy = new Date();
   const totalDias = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate();
   const quedan = Math.max(totalDias - hoy.getDate(), 0);
   const nom = nombres();
-  const ppto = tipo => conceptosDe().filter(c => c.tipo === tipo).reduce((s, c) => s + (c.presupuesto || 0), 0);
+  const mes = mesDe(hoy);
+  const ppto = tipo => conceptosDe().filter(c => c.tipo === tipo).reduce((s, c) => s + presupuestoEn(c, mes), 0);
   const p = { ingreso: ppto('ingreso'), gasto: ppto('gasto'), inversion: ppto('inversion') };
   const movs = listos(await DB.entre(...rangoMes(hoy))).filter(x => delEspacio(x));
   const real = tipo => movs.filter(x => x.tipo === tipo).reduce((s, x) => s + x.monto, 0);
   const r = { ingreso: real('ingreso'), gasto: real('gasto'), inversion: real('inversion') };
   const neg = negocioPorId(estado.espacio);
-  const fila = (nombre, valor, clase = '') =>
-    `<div class="fila linea"><span>${nombre}</span><strong class="${clase}">${valor}</strong></div>`;
 
-  // 1. ¿Cuánto llevo gastado?
-  let llevo;
-  if (p.gasto) {
-    const resta = p.gasto - r.gasto;
-    const porDia = Math.round(Math.max(resta, 0) / Math.max(quedan, 1));
-    llevo = `<div class="grande"><strong class="gasto">${dinero(r.gasto)}</strong> <span>de ${dinero(p.gasto)}</span></div>
-      ${barra(r.gasto, p.gasto, 'gasto')}
-      <p class="veredicto ${resta < 0 ? 'critico' : 'bien'}">${resta < 0
-        ? `Te pasaste ${dinero(-resta)} del presupuesto.`
-        : `Te quedan ${dinero(resta)}: puedes gastar ${dinero(porDia)} por día${quedan ? ` los ${quedan} días que faltan` : ''}.`}</p>`;
-  } else {
-    llevo = `<div class="grande"><strong class="gasto">${dinero(r.gasto)}</strong></div>
-      <p class="nota">Ponle presupuesto a tus gastos (abajo) para saber cuánto puedes gastar por día.</p>`;
-  }
+  // Un medidor: lo anotado contra lo esperado, con una frase que dice qué significa.
+  const medidor = (tipo, titulo, frase) => `
+    <section class="medidor ${tipo}">
+      <div class="fila"><span class="medidor-titulo">${bicho(ANIMAL_TIPO[tipo])} ${titulo}</span>
+        <span><strong>${dinero(r[tipo])}</strong>${p[tipo] ? `<small> de ${dinero(p[tipo])}</small>` : ''}</span></div>
+      ${p[tipo] ? barra(r[tipo], p[tipo], tipo) : ''}
+      <p class="medidor-frase">${frase}</p>
+    </section>`;
 
-  // 2. ¿Cómo cierro el mes? Solo cuando ya hay días suficientes para que el ritmo signifique algo.
-  let cierre;
-  const ingresoCierre = Math.max(r.ingreso, p.ingreso);
-  const inversionCierre = Math.max(r.inversion, p.inversion);
-  if (hoy.getDate() < DIAS_PARA_PROYECTAR) {
-    cierre = `<p class="nota">Desde el día ${DIAS_PARA_PROYECTAR} del mes te digo cómo cerrarías a este ritmo. Antes es muy pronto: un gasto grande al inicio daría un cálculo exagerado.</p>`;
-  } else {
-    const gastoCierre = Math.round(r.gasto / hoy.getDate() * totalDias);
-    const libreCierre = ingresoCierre - gastoCierre - inversionCierre;
-    cierre = `${fila(`${nom.gastos} al terminar el mes`, dinero(gastoCierre), p.gasto && gastoCierre > p.gasto ? 'critico' : 'gasto')}
-      ${fila(`${nom.libre} al terminar el mes`, dinero(libreCierre), libreCierre < 0 ? 'critico' : 'ingreso')}
-      <p class="veredicto ${p.gasto && gastoCierre > p.gasto ? 'critico' : 'bien'}">${!p.gasto ? 'Calculado con lo que llevas gastado por día.'
-        : gastoCierre > p.gasto ? `Vas a pasarte unos ${dinero(gastoCierre - p.gasto)}. Baja un poco el gasto diario.`
-        : 'Vas bien: a este ritmo no te pasas del presupuesto.'}</p>`;
-  }
+  const resta = p.gasto - r.gasto;
+  const fraseGasto = !p.gasto ? 'Ponle presupuesto a tus gastos (abajo) para saber cuánto puedes gastar.'
+    : resta < 0 ? `<b class="critico">Te pasaste ${dinero(-resta)}.</b> Trata de no gastar más este mes.`
+    : `Te quedan <b>${dinero(resta)}</b> para gastar${quedan ? `: unos <b>${dinero(Math.floor(resta / Math.max(quedan, 1)))} por día</b>` : ''}.`;
+  const faltaIng = p.ingreso - r.ingreso;
+  const fraseIng = !p.ingreso ? `Anota tus ${nom.ingresos.toLowerCase()} para verlos aquí.`
+    : faltaIng > 0 ? `Te falta recibir ${dinero(faltaIng)} de lo que esperas.` : '¡Ya recibiste todo lo que esperabas!';
+  const faltaInv = p.inversion - r.inversion;
+  const fraseInv = !p.inversion ? 'Sin meta este mes.'
+    : faltaInv > 0 ? `Te falta ${estado.espacio ? 'comprar' : 'apartar'} ${dinero(faltaInv)} para tu meta.` : '¡Meta cumplida!';
 
-  // 3. ¿Mi plan del mes cuadra? Lo esperado según los presupuestos.
-  const libreP = p.ingreso - p.gasto - p.inversion;
-  const plan = `${fila(`${nom.ingresos} esperados`, dinero(p.ingreso), 'ingreso')}
-    ${fila(`− ${nom.gastos}`, dinero(p.gasto), 'gasto')}
-    ${fila(`− ${nom.inversiones}`, dinero(p.inversion), 'inversion')}
-    <div class="fila linea total"><span>= ${nom.libre}</span><strong class="${libreP < 0 ? 'critico' : ''}">${dinero(libreP)}</strong></div>
-    ${libreP < 0 ? `<p class="veredicto critico">Tu plan no cuadra: ${estado.espacio ? 'gastos y compras suman' : 'gastos e inversión suman'} ${dinero(-libreP)} más de lo que esperas ${estado.espacio ? 'vender' : 'ganar'}. Baja algún presupuesto abajo.</p>` : ''}`;
-
+  // Al cierre: lo que esperas recibir menos lo que esperas gastar e invertir (o lo ya anotado, si es más).
+  const fin = Math.max(r.ingreso, p.ingreso) - Math.max(r.gasto, p.gasto) - Math.max(r.inversion, p.inversion);
   $('proyeccion').innerHTML = `
-    <header class="proy-cabeza">
-      <h1 class="titulo">${MESES[hoy.getMonth()].replace(/^./, l => l.toUpperCase())}${neg ? ` · ${escapar(neg.nombre)}` : ''}</h1>
-      <button type="button" id="abrir-config" class="engranaje" aria-label="Ajustes">⚙️ Ajustes</button>
-    </header>
-    <section class="tarjeta"><h2>¿Cuánto llevas gastado?</h2>${llevo}</section>
-    <section class="tarjeta"><h2>¿Cómo cerrarías el mes?</h2>${cierre}</section>
-    <section class="tarjeta"><h2>Tu plan del mes</h2>${plan}</section>`;
+    <h1 class="titulo">${MESES[hoy.getMonth()].replace(/^./, l => l.toUpperCase())}${neg ? ` · ${escapar(neg.nombre)}` : ''}</h1>
+    <p class="nota">Cómo vas este mes comparado con lo que esperas. Faltan ${quedan} días.</p>
+    ${medidor('gasto', nom.gastos, fraseGasto)}
+    ${medidor('ingreso', nom.ingresos, fraseIng)}
+    ${medidor('inversion', nom.inversiones, fraseInv)}
+    <section class="tarjeta cierre ${fin < 0 ? 'mal' : 'bien'}">
+      <span>Al terminar el mes te quedarían</span>
+      <strong>${dinero(fin)}</strong>
+      <small>${fin < 0
+        ? `Lo que piensas gastar e ${estado.espacio ? 'comprar' : 'invertir'} es más de lo que esperas ${estado.espacio ? 'vender' : 'recibir'}. Baja algún presupuesto abajo.`
+        : `Si cumples tus presupuestos, ese dinero te sobra.`}</small>
+    </section>`;
 }
 
-function pintarAjustes() {
+async function pintarAjustes() {
   pintarProyeccion();
+  const mes = mesDe(new Date());
+  const real = {};
+  for (const x of listos(await DB.entre(...rangoMes(new Date())))) real[x.concepto] = (real[x.concepto] || 0) + x.monto;
   // Presupuestos por tipo, plegables: Gastos abierto, lo demás cerrado para no abrumar.
   const nom = nombres();
   const orden = [['gasto', nom.gastos], ['ingreso', nom.ingresos], ['inversion', nom.inversiones]];
@@ -548,14 +563,14 @@ function pintarAjustes() {
     const lista = conceptosDe().filter(c => c.tipo === tipo)
       .sort((a, b) => a.categoria.localeCompare(b.categoria) || a.orden - b.orden);
     if (!lista.length) return '';
-    const total = lista.reduce((s, c) => s + (c.presupuesto || 0), 0);
+    const total = lista.reduce((s, c) => s + presupuestoEn(c, mes), 0);
     return `<details class="grupo-ppto"${tipo === 'gasto' ? ' open' : ''}>
       <summary><span>${bicho(ANIMAL_TIPO[tipo])} ${titulo}</span><strong>${dinero(total)}<small> al mes</small></strong></summary>
       <ul class="lista">${lista.map(c => `
         <li><button type="button" class="mov" data-concepto="${escapar(c.id)}">
           <span class="mov-icono con-bicho">${escapar(c.icono)}${bicho(animal(c))}</span>
           <span class="mov-texto"><strong>${escapar(c.nombre)}</strong><small>${escapar(c.categoria)}${c.oculto ? ' · oculto en Anotar' : ''}</small></span>
-          <span class="mov-monto">${c.presupuesto ? dinero(c.presupuesto) : '—'}</span>
+          <span class="mov-monto">${presupuestoEn(c, mes) ? dinero(presupuestoEn(c, mes)) : '—'}<small>${real[c.id] ? `llevas ${dinero(real[c.id])}` : 'al mes'}</small></span>
         </button></li>`).join('')}</ul>
     </details>`;
   }).join('');
@@ -577,7 +592,6 @@ function pintarNegocios() {
       <span class="mov-icono">${imgPersonaje(x, 'personaje-lista')}</span>
       <span class="mov-texto"><strong>${escapar(x.nombre)}</strong><small>${x.id === estado.espacio ? 'Lo estás viendo' : 'Toca para cambiar el nombre'}</small></span>
     </button></li>`).join('');
-  $('nuevo-negocio').hidden = estado.negocios.length >= MAX_NEGOCIOS;
   // El widget propio de cada espacio: en la app Android se pone con un toque.
   $('poner-widget').hidden = !widgetNativo();
   $('poner-widget').textContent = `Poner widget de ${n ? n.nombre : 'Personal'} en la pantalla`;
@@ -635,8 +649,15 @@ async function borrarNegocio() {
   });
 }
 
-function abrirConcepto(c, nuevo = {}) {
+// mes: el mes cuyo presupuesto se edita (por defecto el actual; desde Resumen, el mes que se ve).
+function abrirConcepto(c, nuevo = {}, mes = mesDe(new Date())) {
   estado.editandoConcepto = c;
+  estado.mesConcepto = mes;
+  const actual = mesDe(new Date());
+  const [a, m] = mes.split('-').map(Number);
+  $('ppto-etiqueta').textContent = mes === actual ? 'Presupuesto mensual ($)' : `Presupuesto de ${MESES[m - 1]} ${a} ($)`;
+  $('ppto-siguientes').hidden = mes === actual;
+  $('concepto-form').siguientes.checked = false;
   const f = $('concepto-form');
   const categorias = [...new Set(conceptosDe().map(x => x.categoria))].sort();
   $('lista-categorias').innerHTML = categorias.map(x => `<option value="${escapar(x)}">`).join('');
@@ -649,7 +670,7 @@ function abrirConcepto(c, nuevo = {}) {
   f.icono.value = c ? c.icono : '';
   f.tipo.value = tipo;
   f.categoria.value = c ? c.categoria : (nuevo.nombre || nuevo.tipo) ? comun : '';
-  f.presupuesto.value = c ? (c.presupuesto / 100).toFixed(2) : '';
+  f.presupuesto.value = c ? (presupuestoEn(c, mes) / 100).toFixed(2) : '';
   f.oculto.checked = c ? !!c.oculto : false;
   $('concepto-borrar').hidden = !c;
   $('editor-concepto').showModal();
@@ -664,21 +685,28 @@ async function guardarConcepto() {
     return false;
   }
   const previo = estado.editandoConcepto;
-  // El monto nuevo rige desde este mes; los meses pasados guardan el que tenían.
-  const mes = mesDe(new Date());
+  // El monto rige desde el mes editado. En el mes actual, también hacia adelante. En un mes pasado,
+  // solo ese mes (salvo que marques "también los meses siguientes"): el mes de después conserva el suyo.
+  const actual = mesDe(new Date());
+  const mes = estado.mesConcepto || actual;
+  const hacia = mes >= actual || f.siguientes.checked;
   let historial = previo ? { ...(previo.historial || {}) } : {};
-  if (!previo || previo.presupuesto !== ppto) {
+  if (!previo || presupuestoEn(previo, mes) !== ppto) {
     if (previo && !Object.keys(historial).length) historial['0000-00'] = previo.presupuesto || 0;
-    for (const k of Object.keys(historial)) if (k > mes) delete historial[k];
+    const [a, m] = mes.split('-').map(Number);
+    const siguiente = fechaLocal(new Date(a, m, 1)).slice(0, 7);
+    if (previo && !hacia && !(siguiente in historial)) historial[siguiente] = presupuestoEn(previo, siguiente);
+    if (hacia) for (const k of Object.keys(historial)) if (k > mes) delete historial[k];
     historial[mes] = ppto;
   }
+  const vigente = { historial, presupuesto: ppto };
   const c = {
     ...(previo || { id: nuevoId(), orden: estado.conceptos.length, usos: 0, negocio: estado.espacio }),
     nombre: f.nombre.value.trim(),
     icono: f.icono.value.trim() || '•',
     tipo: f.tipo.value,
     categoria: f.categoria.value.trim(),
-    presupuesto: ppto,
+    presupuesto: presupuestoEn(vigente, actual),
     historial,
     oculto: f.oculto.checked,
   };
@@ -821,7 +849,7 @@ function repintar() {
 function mostrar(vista) {
   estado.vista = vista;
   document.querySelectorAll('.vista').forEach(v => v.classList.toggle('activa', v.id === 'vista-' + vista));
-  document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('activo', b.dataset.vista === (vista === 'config' ? 'ajustes' : vista)));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('activo', b.dataset.vista === vista));
   repintar();
   seguirAtras();
 }
@@ -842,7 +870,6 @@ addEventListener('popstate', () => {
   const abierta = [...document.querySelectorAll('dialog[open]')].pop();
   // La de la contraseña no se cierra: sin contraseña no se usa la app.
   if (abierta) { if (abierta.id !== 'bienvenida') abierta.close(); }
-  else if (estado.vista === 'config') mostrar('ajustes');
   else if (estado.vista !== 'anotar') mostrar('anotar');
   seguirAtras();
 });
@@ -879,6 +906,19 @@ document.querySelector('.nav').addEventListener('click', e => {
 });
 
 $('deshacer').addEventListener('click', deshacer);
+
+$('resumen').addEventListener('click', e => {
+  const h = e.target.closest('.hist-fila[data-mes]');
+  if (h) {
+    const [a, m] = h.dataset.mes.split('-').map(Number);
+    estado.mes = new Date(a, m - 1, 1);
+    repintar();
+    $('vista-resumen').scrollTo({ top: 0, behavior: 'smooth' });
+    return;
+  }
+  const f = e.target.closest('.concepto-fila[data-concepto]');
+  if (f) abrirConcepto(concepto(f.dataset.concepto), {}, mesDe(estado.mes));
+});
 
 document.querySelectorAll('[data-mes]').forEach(b => b.addEventListener('click', () => {
   estado.mes = new Date(estado.mes.getFullYear(), estado.mes.getMonth() + Number(b.dataset.mes), 1);
@@ -961,8 +1001,7 @@ $('ajustes-lista').addEventListener('click', e => {
   if (b) abrirConcepto(concepto(b.dataset.concepto));
 });
 $('nuevo-concepto').addEventListener('click', () => abrirConcepto(null));
-$('proyeccion').addEventListener('click', e => { if (e.target.closest('#abrir-config')) mostrar('config'); });
-$('volver-proyeccion').addEventListener('click', () => mostrar('ajustes'));
+
 // Un concepto solo se borra si no tiene movimientos; si tiene, se puede ocultar.
 $('concepto-borrar').addEventListener('click', async () => {
   const c = estado.editandoConcepto;
@@ -1025,21 +1064,25 @@ let gesto = null;
 document.querySelector('main').addEventListener('touchstart', e => {
   const t = e.touches[0];
   gesto = null;
-  if (e.touches.length !== 1 || estado.vista === 'movimientos' || document.querySelector('dialog[open]')) return;
+  if (e.touches.length !== 1 || document.querySelector('dialog[open]')) return;
   if (t.clientX < 32 || t.clientX > innerWidth - 32) return;
   if (e.target.closest('input, textarea, select, .grafico, .espacios')) return;
-  gesto = { x: t.clientX, y: t.clientY, t: Date.now() };
+  gesto = { x: t.clientX, y: t.clientY, t: Date.now(), fila: !!e.target.closest('#lista .mov') };
 }, { passive: true });
 document.querySelector('main').addEventListener('touchend', e => {
   if (!gesto) return;
   const t = e.changedTouches[0];
   const dx = t.clientX - gesto.x, dy = t.clientY - gesto.y;
   const rapido = Date.now() - gesto.t < 700;
+  const fila = gesto.fila;
   gesto = null;
+  // En Movimientos, deslizar una fila a la izquierda la borra: ese gesto no cambia de espacio.
+  if (fila && dx < 0) return;
   if (rapido && Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 2) cambiarEspacio(dx < 0 ? 1 : -1);
 }, { passive: true });
 
 $('espacios').addEventListener('click', e => {
+  if (e.target.closest('#chip-nuevo-negocio')) { abrirNegocio(null); return; }
   const b = e.target.closest('[data-espacio]');
   if (!b || b.dataset.espacio === estado.espacio) return;
   elegirEspacio(b.dataset.espacio);
@@ -1049,7 +1092,6 @@ $('espacios').addEventListener('click', e => {
   pintarEspacios();
   repintar();
 });
-$('nuevo-negocio').addEventListener('click', () => abrirNegocio(null));
 $('negocios-lista').addEventListener('click', e => {
   const b = e.target.closest('[data-negocio]');
   if (b) abrirNegocio(negocioPorId(b.dataset.negocio));

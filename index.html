@@ -87,16 +87,12 @@
 
     <!-- Ajustes: lo que se toca poco, aparte de la proyección para que no estorbe -->
     <section id="vista-config" class="vista">
-      <header class="proy-cabeza">
-        <button type="button" id="volver-proyeccion" class="engranaje" aria-label="Volver">‹ Proyección</button>
-        <h1 class="titulo">Ajustes</h1>
-      </header>
+      <h1 class="titulo">Ajustes</h1>
 
       <section class="tarjeta">
         <h2>Mis negocios</h2>
-        <p class="nota arriba">Cada negocio (hasta 3) tiene sus propios conceptos, resumen y widget. Cambias entre Personal y tus negocios en la fila de arriba.</p>
+        <p class="nota arriba">Toca un negocio para cambiarle el nombre o el personaje. Para crear uno nuevo, toca "＋ Negocio" en la fila de arriba.</p>
         <ul id="negocios-lista" class="lista"></ul>
-        <button type="button" id="nuevo-negocio" class="boton-ancho">+ Agregar negocio</button>
         <button type="button" id="poner-widget" class="boton-ancho" hidden></button>
         <p id="widget-nota" class="nota"></p>
       </section>
@@ -139,6 +135,7 @@
     <button type="button" class="nav-btn" data-vista="movimientos"><i class="bicho" aria-hidden="true">🦎</i>Movimientos</button>
     <button type="button" class="nav-btn" data-vista="resumen"><i class="bicho" aria-hidden="true">🦉</i>Resumen</button>
     <button type="button" class="nav-btn" data-vista="ajustes"><i class="bicho" aria-hidden="true">🦅</i>Proyección</button>
+    <button type="button" class="nav-btn" data-vista="config"><i class="bicho" aria-hidden="true">🐢</i>Ajustes</button>
   </nav>
 
   <div id="aviso" class="aviso" role="status" hidden>
@@ -214,9 +211,10 @@
         <input name="categoria" list="lista-categorias" autocomplete="off" required>
         <datalist id="lista-categorias"></datalist>
       </label>
-      <label>Presupuesto mensual ($)
+      <label><span id="ppto-etiqueta">Presupuesto mensual ($)</span>
         <input name="presupuesto" inputmode="decimal" autocomplete="off">
       </label>
+      <label class="check" id="ppto-siguientes" hidden><input type="checkbox" name="siguientes"> También para los meses siguientes</label>
       <label class="check"><input type="checkbox" name="oculto"> Ocultar en Anotar</label>
       <div class="editor-botones">
         <button type="button" id="concepto-borrar" class="peligro">Borrar</button>
