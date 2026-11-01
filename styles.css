@@ -576,3 +576,15 @@ dialog .personajes label:has(input:checked) { border-color: var(--acento); backg
 .avanzado { margin-top: 8px; }
 .avanzado summary { color: var(--suave); font-size: 14px; cursor: pointer; padding: 6px 0; }
 .peligro-zona { border-color: color-mix(in srgb, var(--critico) 35%, var(--borde)); }
+
+/* Botón para crear concepto desde Anotar: pequeño y punteado, para que no parezca un concepto más */
+.conceptos-cabeza { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+.conceptos-cabeza span { font-size: 13px; color: var(--suave); font-weight: 600; }
+.mini-nuevo { border: 1.5px dashed var(--acento); background: transparent; color: var(--acento); border-radius: 999px; padding: 4px 12px; font-size: 13px; font-weight: 700; }
+.conceptos-cabeza + .conceptos { margin-top: 6px; }
+
+/* Al deslizar entre Personal y negocios, la pantalla entra desde el lado */
+@keyframes entra-izq { from { transform: translateX(40px); opacity: .3; } to { transform: none; opacity: 1; } }
+@keyframes entra-der { from { transform: translateX(-40px); opacity: .3; } to { transform: none; opacity: 1; } }
+.vista.entra-izq { animation: entra-izq .22s ease-out; }
+.vista.entra-der { animation: entra-der .22s ease-out; }

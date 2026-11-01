@@ -648,7 +648,7 @@ function abrirConcepto(c, nuevo = {}) {
   f.nombre.value = c ? c.nombre : nuevo.nombre || '';
   f.icono.value = c ? c.icono : '';
   f.tipo.value = tipo;
-  f.categoria.value = c ? c.categoria : nuevo.nombre ? comun : '';
+  f.categoria.value = c ? c.categoria : (nuevo.nombre || nuevo.tipo) ? comun : '';
   f.presupuesto.value = c ? (c.presupuesto / 100).toFixed(2) : '';
   f.oculto.checked = c ? !!c.oculto : false;
   $('concepto-borrar').hidden = !c;
@@ -857,6 +857,8 @@ $('teclado').addEventListener('click', e => {
   if (b) teclear(b.dataset.k);
 });
 
+// Entre el teclado y los conceptos: crear uno de este tipo sin ir a Proyección.
+$('anotar-nuevo-concepto').addEventListener('click', () => abrirConcepto(null, { tipo: estado.tipo }));
 $('conceptos').addEventListener('click', async e => {
   const b = e.target.closest('.cat');
   if (!b) return;
@@ -998,6 +1000,44 @@ $('concepto-form').addEventListener('submit', async e => {
 });
 
 $('exportar').addEventListener('click', exportar);
+
+// ---------- Deslizar a los lados ----------
+// Deslizar el dedo a la izquierda o derecha cambia entre Personal y los negocios (da la vuelta).
+// Empieza lejos de los bordes (Android los usa para Atrás) y no en Movimientos, donde deslizar borra.
+function cambiarEspacio(paso) {
+  const ids = ['', ...estado.negocios.map(n => n.id)];
+  if (ids.length < 2) return;
+  const i = (ids.indexOf(estado.espacio) + paso + ids.length) % ids.length;
+  elegirEspacio(ids[i]);
+  estado.entrada = '';
+  estado.inicio = null;
+  pintarMonto();
+  pintarEspacios();
+  repintar();
+  const n = negocioPorId(ids[i]);
+  avisar(n ? `${n.nombre}` : 'Personal');
+  const v = document.querySelector('.vista.activa');
+  if (v) { v.classList.remove('entra-izq', 'entra-der'); void v.offsetWidth; v.classList.add(paso > 0 ? 'entra-izq' : 'entra-der'); }
+  vibrar(15);
+}
+
+let gesto = null;
+document.querySelector('main').addEventListener('touchstart', e => {
+  const t = e.touches[0];
+  gesto = null;
+  if (e.touches.length !== 1 || estado.vista === 'movimientos' || document.querySelector('dialog[open]')) return;
+  if (t.clientX < 32 || t.clientX > innerWidth - 32) return;
+  if (e.target.closest('input, textarea, select, .grafico, .espacios')) return;
+  gesto = { x: t.clientX, y: t.clientY, t: Date.now() };
+}, { passive: true });
+document.querySelector('main').addEventListener('touchend', e => {
+  if (!gesto) return;
+  const t = e.changedTouches[0];
+  const dx = t.clientX - gesto.x, dy = t.clientY - gesto.y;
+  const rapido = Date.now() - gesto.t < 700;
+  gesto = null;
+  if (rapido && Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 2) cambiarEspacio(dx < 0 ? 1 : -1);
+}, { passive: true });
 
 $('espacios').addEventListener('click', e => {
   const b = e.target.closest('[data-espacio]');
