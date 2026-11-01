@@ -88,6 +88,13 @@ public class MainActivity extends Activity {
         else web.loadUrl(URL);
     }
 
+    // Al volver a la app, los widgets se redibujan (nombre o personaje nuevos, widgets recién puestos).
+    @Override
+    protected void onResume() {
+        super.onResume();
+        WidgetVoz.dibujarTodos(this);
+    }
+
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
@@ -175,6 +182,7 @@ public class MainActivity extends Activity {
                 aviso("Tu pantalla de inicio no deja ponerlo desde aquí: mantén presionado el inicio → Widgets → MIG.");
                 return;
             }
+            WidgetVoz.pedido(MainActivity.this, negocio);
             Intent listo = new Intent(MainActivity.this, WidgetVoz.class)
                     .setAction(WidgetVoz.FIJADO)
                     .putExtra(WidgetVoz.NEGOCIO, negocio == null ? "" : negocio);

@@ -37,8 +37,39 @@ public class WidgetVoz extends AppWidgetProvider {
     }
 
     static void elegir(Context ctx, int id, String negocio) {
-        prefs(ctx).edit().putString("widget-" + id, negocio == null ? "" : negocio).apply();
+        prefs(ctx).edit().putString("widget-" + id, negocio == null ? "" : negocio).commit();
         dibujar(ctx, AppWidgetManager.getInstance(ctx), id);
+    }
+
+    // "Poner widget de X en la pantalla": se anota qué negocio se pidió. Algunos celulares no avisan
+    // con el número del widget nuevo (o abren la pantalla de elegir), así que el primer widget sin dueño
+    // que aparezca en los próximos 2 minutos queda de ese negocio.
+    static void pedido(Context ctx, String negocio) {
+        SharedPreferences.Editor e = prefs(ctx).edit();
+        // Los widgets que ya están puestos sin dueño guardado son de Personal: así no toman el pedido.
+        AppWidgetManager m = AppWidgetManager.getInstance(ctx);
+        for (int id : m.getAppWidgetIds(new ComponentName(ctx, WidgetVoz.class))) {
+            if (!prefs(ctx).contains("widget-" + id)) e.putString("widget-" + id, "");
+        }
+        e.putString("pin-negocio", negocio == null ? "" : negocio)
+                .putLong("pin-hora", System.currentTimeMillis()).commit();
+    }
+
+    // El negocio pedido hace poco, o null. Se usa una sola vez.
+    static String tomarPedido(Context ctx) {
+        SharedPreferences p = prefs(ctx);
+        long hora = p.getLong("pin-hora", 0);
+        if (System.currentTimeMillis() - hora > 120000) return null;
+        String n = p.getString("pin-negocio", null);
+        p.edit().remove("pin-negocio").remove("pin-hora").commit();
+        return n;
+    }
+
+    // Un widget recién puesto todavía no tiene dueño guardado: toma el pedido pendiente si lo hay.
+    static void asignarSiNuevo(Context ctx, int id) {
+        if (prefs(ctx).contains("widget-" + id)) return;
+        String n = tomarPedido(ctx);
+        if (n != null) prefs(ctx).edit().putString("widget-" + id, n).commit();
     }
 
     // Lista de negocios que guarda la página: [{id, nombre, personaje}].
@@ -120,19 +151,30 @@ public class WidgetVoz extends AppWidgetProvider {
         if (nombre == null) {
             vista.setImageViewResource(R.id.mic, R.drawable.widget_hormiga);
         } else {
-            vista.setImageViewBitmap(R.id.mic, dibujo(ctx, buscar(ctx, negocio).optString("personaje"), nombre));
+            try {
+                vista.setImageViewBitmap(R.id.mic, dibujo(ctx, buscar(ctx, negocio).optString("personaje"), nombre));
+            } catch (Throwable e) {
+                // Si no se pudo dibujar la cinta, al menos el personaje del negocio.
+                vista.setImageViewResource(R.id.mic, imagenPersonaje(buscar(ctx, negocio).optString("personaje")));
+            }
         }
         manager.updateAppWidget(id, vista);
     }
 
     static void dibujarTodos(Context ctx) {
         AppWidgetManager m = AppWidgetManager.getInstance(ctx);
-        for (int id : m.getAppWidgetIds(new ComponentName(ctx, WidgetVoz.class))) dibujar(ctx, m, id);
+        for (int id : m.getAppWidgetIds(new ComponentName(ctx, WidgetVoz.class))) {
+            asignarSiNuevo(ctx, id);
+            dibujar(ctx, m, id);
+        }
     }
 
     @Override
     public void onUpdate(Context ctx, AppWidgetManager manager, int[] ids) {
-        for (int id : ids) dibujar(ctx, manager, id);
+        for (int id : ids) {
+            asignarSiNuevo(ctx, id);
+            dibujar(ctx, manager, id);
+        }
     }
 
     @Override
@@ -147,7 +189,10 @@ public class WidgetVoz extends AppWidgetProvider {
     public void onReceive(Context ctx, Intent intent) {
         if (FIJADO.equals(intent.getAction())) {
             int id = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID);
-            if (id != AppWidgetManager.INVALID_APPWIDGET_ID) elegir(ctx, id, intent.getStringExtra(NEGOCIO));
+            if (id != AppWidgetManager.INVALID_APPWIDGET_ID) {
+                tomarPedido(ctx);
+                elegir(ctx, id, intent.getStringExtra(NEGOCIO));
+            }
             return;
         }
         super.onReceive(ctx, intent);
