@@ -1,6 +1,6 @@
 // Guardado local en el teléfono (IndexedDB). Funciona sin internet.
 const DB = (() => {
-  const NOMBRE = 'finanzas', VERSION = 5;
+  const NOMBRE = 'finanzas', VERSION = 6;
 
   // Conceptos iniciales, tomados del Excel de fer. Presupuesto mensual en centavos.
   const CONCEPTOS_INICIALES = [
@@ -101,6 +101,8 @@ const DB = (() => {
         if (e.oldVersion === 2) aInversion(tx);
         if (e.oldVersion >= 2 && e.oldVersion < 4) agregarOtros(tx);
         if (e.oldVersion === 4) aGastosHormiga(tx);
+        // Versión 6: negocios (hasta 3). Movimientos y conceptos sin campo negocio son personales.
+        if (e.oldVersion < 6) db.createObjectStore('negocios', { keyPath: 'id' });
       };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
@@ -129,5 +131,20 @@ const DB = (() => {
     conceptos: () => operar('conceptos', 'readonly', t => t.getAll()),
     guardarConcepto: c => operar('conceptos', 'readwrite', t => t.put(c)),
     borrarConcepto: id => operar('conceptos', 'readwrite', t => t.delete(id)),
+    negocios: () => operar('negocios', 'readonly', t => t.getAll()),
+    guardarNegocio: n => operar('negocios', 'readwrite', t => t.put(n)),
+    borrarNegocio: id => operar('negocios', 'readwrite', t => t.delete(id)),
+    // Conceptos que trae un negocio nuevo: lo que suele pasar en un negocio pequeño de ventas.
+    conceptosNegocio: (negocio, orden) => [
+      ['ventas', 'Ventas', 'ingreso', 'Ventas', '💵'],
+      ['mercaderia', 'Mercadería', 'inversion', 'Compras', '📦'],
+      ['envios', 'Envíos', 'gasto', 'Gastos del negocio', '🚚'],
+      ['pasajes', 'Pasajes', 'gasto', 'Gastos del negocio', '🚌'],
+      ['publicidad', 'Publicidad', 'gasto', 'Gastos del negocio', '📣'],
+      ['otros', 'Otros gastos', 'gasto', 'Gastos del negocio', '🪙'],
+    ].map(([id, nombre, tipo, categoria, icono], i) => ({
+      id: `${negocio}-${id}`, negocio, nombre, tipo, categoria, presupuesto: 0, icono,
+      orden: orden + i, oculto: false, usos: 0,
+    })),
   };
 })();

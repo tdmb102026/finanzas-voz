@@ -39,7 +39,26 @@ const estado = {
   editando: null,
   editandoConcepto: null,
   vista: 'anotar',
+  negocios: [],       // hasta 3: { id, nombre, icono, orden }
+  espacio: leerEspacio(),  // '' = finanzas personales, o el id del negocio que se está viendo
+  editandoNegocio: null,
 };
+
+// ---------- Personal y negocios ----------
+// Cada movimiento y cada concepto tiene `negocio` ('' o sin campo = personal). Cada vista muestra solo
+// lo del espacio elegido arriba, así lo del negocio no se mezcla con los gastos personales.
+const MAX_NEGOCIOS = 3;
+function leerEspacio() { try { return localStorage.getItem('espacio') || ''; } catch { return ''; } }
+const negocioDe = x => (x && x.negocio) || '';
+const delEspacio = (x, esp = estado.espacio) => negocioDe(x) === esp;
+const conceptosDe = (esp = estado.espacio) => estado.conceptos.filter(c => delEspacio(c, esp));
+const negocioPorId = id => estado.negocios.find(n => n.id === id) || null;
+// En un negocio se habla de ventas, compras y ganancia en vez de ingresos, inversión y libre.
+const NOMBRES = {
+  personal: { gasto: 'Gasto', ingreso: 'Ingreso', inversion: 'Inversión', gastos: 'Gastos', ingresos: 'Ingresos', inversiones: 'Inversión', libre: 'Libre' },
+  negocio: { gasto: 'Gasto', ingreso: 'Venta', inversion: 'Compra', gastos: 'Gastos', ingresos: 'Ventas', inversiones: 'Compras', libre: 'Ganancia' },
+};
+const nombres = (esp = estado.espacio) => (esp ? NOMBRES.negocio : NOMBRES.personal);
 
 // ---------- Utilidades ----------
 
@@ -92,6 +111,39 @@ const listos = movs => movs.filter(x => x.estado !== 'pendiente');
 
 async function cargarConceptos() {
   estado.conceptos = (await DB.conceptos()).sort((a, b) => a.orden - b.orden);
+  estado.negocios = (await DB.negocios()).sort((a, b) => a.orden - b.orden);
+  if (estado.espacio && !negocioPorId(estado.espacio)) elegirEspacio('');
+  pintarEspacios();
+  contarAndroid();
+}
+
+function elegirEspacio(esp) {
+  estado.espacio = esp;
+  try { localStorage.setItem('espacio', esp); } catch { /* sin almacenamiento */ }
+  estado.tipo = 'gasto';
+}
+
+// Fila de arriba: Personal y cada negocio. Solo aparece cuando hay al menos un negocio.
+async function pintarEspacios() {
+  const hay = estado.negocios.length > 0;
+  document.body.classList.toggle('con-negocios', hay);
+  $('espacios').hidden = !hay;
+  if (!hay) return;
+  // Frases por revisar de los otros espacios, para que no se pierdan de vista.
+  const pend = {};
+  for (const x of await DB.todos()) if (x.estado === 'pendiente') pend[negocioDe(x)] = (pend[negocioDe(x)] || 0) + 1;
+  const chip = (id, icono, nombre) => `<button type="button" class="espacio${id === estado.espacio ? ' activo' : ''}"
+      data-espacio="${escapar(id)}"${id !== estado.espacio && pend[id] ? ` data-cuenta="${pend[id]}"` : ''}>
+      <span>${escapar(icono)}</span>${escapar(nombre)}</button>`;
+  $('espacios').innerHTML = chip('', '🐜', 'Personal')
+    + estado.negocios.map(n => chip(n.id, n.icono, n.nombre)).join('');
+}
+
+// La app Android guarda la lista de negocios para que cada widget sepa a cuál anota.
+function contarAndroid() {
+  if (window.AndroidVoz && typeof AndroidVoz.negocios === 'function') {
+    AndroidVoz.negocios(JSON.stringify(estado.negocios.map(n => ({ id: n.id, nombre: n.nombre, icono: n.icono }))));
+  }
 }
 
 // ---------- Anotar ----------
@@ -103,8 +155,10 @@ function pintarTipo() {
     b.setAttribute('aria-checked', activo);
   });
   document.body.dataset.tipo = estado.tipo;
+  const nom = nombres();
+  document.querySelectorAll('.tipo-btn').forEach(b => { b.lastChild.textContent = nom[b.dataset.tipo]; });
   // Los más usados primero, para que queden siempre a la vista.
-  const lista = estado.conceptos
+  const lista = conceptosDe()
     .filter(c => c.tipo === estado.tipo && !c.oculto)
     .sort((a, b) => (b.usos - a.usos) || (a.orden - b.orden));
   $('conceptos').innerHTML = lista.map(c =>
@@ -153,6 +207,7 @@ async function anotar(conceptoId) {
     fecha: fechaLocal(),
     nota: '',
     frase: '',
+    negocio: estado.espacio,
     estado: 'listo',
     ms: estado.inicio ? Date.now() - estado.inicio : null,
     creado: new Date().toISOString(),
@@ -207,8 +262,8 @@ function pintarMes() {
 
 async function pintarMovimientos() {
   pintarMes();
-  const movs = listos(await DB.entre(...rangoMes(estado.mes))).sort((a, b) => b.fecha.localeCompare(a.fecha));
-  const pendientes = (await DB.todos()).filter(x => x.estado === 'pendiente').sort((a, b) => b.fecha.localeCompare(a.fecha));
+  const movs = listos(await DB.entre(...rangoMes(estado.mes))).filter(x => delEspacio(x)).sort((a, b) => b.fecha.localeCompare(a.fecha));
+  const pendientes = (await DB.todos()).filter(x => x.estado === 'pendiente' && delEspacio(x)).sort((a, b) => b.fecha.localeCompare(a.fecha));
 
   let dia = '', html = '';
   if (pendientes.length) {
@@ -273,7 +328,7 @@ function presupuestoEn(c, mes) {
 function agrupar(movs, mes) {
   const real = {};
   for (const x of movs) real[x.concepto] = (real[x.concepto] || 0) + x.monto;
-  const ids = new Set([...estado.conceptos.filter(c => presupuestoEn(c, mes) > 0).map(c => c.id), ...Object.keys(real)]);
+  const ids = new Set([...conceptosDe().filter(c => presupuestoEn(c, mes) > 0).map(c => c.id), ...Object.keys(real)]);
   const tipos = { ingreso: new Map(), gasto: new Map(), inversion: new Map() };
   for (const id of ids) {
     const c = concepto(id);
@@ -327,8 +382,9 @@ function bloqueTipo(titulo, cats, tipo) {
 async function pintarResumen() {
   pintarMes();
   const m = estado.mes;
-  const movs = listos(await DB.entre(...rangoMes(m)));
+  const movs = listos(await DB.entre(...rangoMes(m))).filter(x => delEspacio(x));
   const g = agrupar(movs, mesDe(m));
+  const nom = nombres();
   const suma = (cats, campo) => cats.reduce((s, c) => s + c[campo], 0);
   const ing = { real: suma(g.ingreso, 'real'), ppto: suma(g.ingreso, 'ppto') };
   const egr = { real: suma(g.gasto, 'real'), ppto: suma(g.gasto, 'ppto') };
@@ -338,10 +394,10 @@ async function pintarResumen() {
 
   // 1. ¿A dónde se fue el ingreso? Gastos, inversión y lo que queda libre.
   const reparto = Graficos.dona([
-    { nombre: 'Gastos', valor: egr.real, color: 'var(--c-gasto)' },
-    { nombre: 'Inversión', valor: inv.real, color: 'var(--c-inversion)' },
-    { nombre: 'Libre', valor: Math.max(libre, 0), color: 'var(--c-libre)' },
-  ].filter(p => p.valor > 0), { titulo: libre < 0 ? 'Te faltan' : 'Libre', valor: dinero(Math.abs(libre)) });
+    { nombre: nom.gastos, valor: egr.real, color: 'var(--c-gasto)' },
+    { nombre: nom.inversiones, valor: inv.real, color: 'var(--c-inversion)' },
+    { nombre: nom.libre, valor: Math.max(libre, 0), color: 'var(--c-libre)' },
+  ].filter(p => p.valor > 0), { titulo: libre < 0 ? (estado.espacio ? 'Pérdida' : 'Te faltan') : nom.libre, valor: dinero(Math.abs(libre)) });
 
   // 2. Curva de gastos acumulados día a día contra el ritmo del presupuesto.
   const totalDias = new Date(m.getFullYear(), m.getMonth() + 1, 0).getDate();
@@ -367,7 +423,7 @@ async function pintarResumen() {
 
   // 4. Últimos 6 meses: ingresos, gastos e inversión.
   const inicio = new Date(m.getFullYear(), m.getMonth() - 5, 1);
-  const seis = listos(await DB.entre(fechaLocal(inicio), rangoMes(m)[1]));
+  const seis = listos(await DB.entre(fechaLocal(inicio), rangoMes(m)[1])).filter(x => delEspacio(x));
   const meses = Array.from({ length: 6 }, (_, k) => {
     const f = new Date(inicio.getFullYear(), inicio.getMonth() + k, 1);
     const clave = fechaLocal(f).slice(0, 7);
@@ -376,9 +432,9 @@ async function pintarResumen() {
     return { nombre: MESES[f.getMonth()].slice(0, 3), valores: [t('ingreso'), t('gasto'), t('inversion')] };
   });
   const historial = meses.some(x => x.valores.some(v => v)) ? Graficos.barras(meses, [
-    { nombre: 'Ingresos', color: 'var(--c-ingreso)' },
-    { nombre: 'Gastos', color: 'var(--c-gasto)' },
-    { nombre: 'Inversión', color: 'var(--c-inversion)' },
+    { nombre: nom.ingresos, color: 'var(--c-ingreso)' },
+    { nombre: nom.gastos, color: 'var(--c-gasto)' },
+    { nombre: nom.inversiones, color: 'var(--c-inversion)' },
   ]) : '';
 
   const tarjeta = (titulo, cuerpo, pie = '') => cuerpo
@@ -386,19 +442,21 @@ async function pintarResumen() {
 
   $('resumen').innerHTML = `
     <div class="totales">
-      <div><span>${bicho(ANIMAL_TIPO.ingreso)} Ingresos</span><strong class="ingreso">${dinero(ing.real)}</strong><small>Ppto ${dinero(ing.ppto)}</small></div>
-      <div><span>${bicho(ANIMAL_TIPO.gasto)} Gastos</span><strong class="gasto">${dinero(egr.real)}</strong><small>Ppto ${dinero(egr.ppto)}</small></div>
-      <div><span>${bicho(ANIMAL_TIPO.inversion)} Inversión</span><strong class="inversion">${dinero(inv.real)}</strong><small>Ppto ${dinero(inv.ppto)}</small></div>
-      <div><span>${bicho(ANIMAL_TIPO.libre)} Libre</span><strong class="${libre < 0 ? 'gasto' : ''}">${dinero(libre)}</strong><small>Ppto ${dinero(ing.ppto - egr.ppto - inv.ppto)}</small></div>
+      <div><span>${bicho(ANIMAL_TIPO.ingreso)} ${nom.ingresos}</span><strong class="ingreso">${dinero(ing.real)}</strong><small>Ppto ${dinero(ing.ppto)}</small></div>
+      <div><span>${bicho(ANIMAL_TIPO.gasto)} ${nom.gastos}</span><strong class="gasto">${dinero(egr.real)}</strong><small>Ppto ${dinero(egr.ppto)}</small></div>
+      <div><span>${bicho(ANIMAL_TIPO.inversion)} ${nom.inversiones}</span><strong class="inversion">${dinero(inv.real)}</strong><small>Ppto ${dinero(inv.ppto)}</small></div>
+      <div><span>${bicho(ANIMAL_TIPO.libre)} ${nom.libre}</span><strong class="${libre < 0 ? 'gasto' : ''}">${dinero(libre)}</strong><small>Ppto ${dinero(ing.ppto - egr.ppto - inv.ppto)}</small></div>
     </div>
-    ${tarjeta('¿A dónde se fue tu ingreso?', reparto, `Inviertes el ${pctInvertido}% de lo que ganas. Toca la dona para ver cada parte.`)}
+    ${estado.espacio
+      ? tarjeta('¿A dónde se fueron las ventas?', reparto, `Las compras de mercadería son el ${pctInvertido}% de lo vendido. Toca la dona para ver cada parte.`)
+      : tarjeta('¿A dónde se fue tu ingreso?', reparto, `Inviertes el ${pctInvertido}% de lo que ganas. Toca la dona para ver cada parte.`)}
     ${tarjeta('Gastos del mes, día a día', curva, `${frase} La línea punteada es el presupuesto repartido parejo en el mes.`)}
     ${tarjeta('¿En qué gastas más?', donaGastos)}
     ${tarjeta('Últimos 6 meses', historial, 'Toca un mes para ver los montos.')}
-    <p class="nota centro">Gastos: ${diferencia(egr.real, egr.ppto, 'gasto')}. Inversión: ${diferencia(inv.real, inv.ppto, 'inversion')}. Ingresos: ${diferencia(ing.real, ing.ppto, 'ingreso')}.</p>
-    ${bloqueTipo('Gastos por categoría', g.gasto, 'gasto')}
-    ${bloqueTipo('Inversión por categoría', g.inversion, 'inversion')}
-    ${bloqueTipo('Ingresos por categoría', g.ingreso, 'ingreso')}`;
+    <p class="nota centro">${nom.gastos}: ${diferencia(egr.real, egr.ppto, 'gasto')}. ${nom.inversiones}: ${diferencia(inv.real, inv.ppto, 'inversion')}. ${nom.ingresos}: ${diferencia(ing.real, ing.ppto, 'ingreso')}.</p>
+    ${bloqueTipo(`${nom.gastos} por categoría`, g.gasto, 'gasto')}
+    ${bloqueTipo(`${nom.inversiones} por categoría`, g.inversion, 'inversion')}
+    ${bloqueTipo(`${nom.ingresos} por categoría`, g.ingreso, 'ingreso')}`;
   Graficos.activar($('resumen'));
 }
 
@@ -408,11 +466,12 @@ async function pintarResumen() {
 async function pintarProyeccion() {
   const hoy = new Date();
   const totalDias = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate();
-  const ppto = tipo => estado.conceptos.filter(c => c.tipo === tipo).reduce((s, c) => s + (c.presupuesto || 0), 0);
+  const nom = nombres();
+  const ppto = tipo => conceptosDe().filter(c => c.tipo === tipo).reduce((s, c) => s + (c.presupuesto || 0), 0);
   const p = { ingreso: ppto('ingreso'), gasto: ppto('gasto'), inversion: ppto('inversion') };
   const libreP = p.ingreso - p.gasto - p.inversion;
 
-  const movs = listos(await DB.entre(...rangoMes(hoy)));
+  const movs = listos(await DB.entre(...rangoMes(hoy))).filter(x => delEspacio(x));
   const real = tipo => movs.filter(x => x.tipo === tipo).reduce((s, x) => s + x.monto, 0);
   const r = { ingreso: real('ingreso'), gasto: real('gasto'), inversion: real('inversion') };
   const gastoCierre = Math.round(r.gasto / hoy.getDate() * totalDias);
@@ -421,32 +480,32 @@ async function pintarProyeccion() {
   const libreCierre = ingresoCierre - gastoCierre - inversionCierre;
 
   const reparto = Graficos.dona([
-    { nombre: 'Gastos', valor: p.gasto, color: 'var(--c-gasto)' },
-    { nombre: 'Inversión', valor: p.inversion, color: 'var(--c-inversion)' },
-    { nombre: 'Libre', valor: Math.max(libreP, 0), color: 'var(--c-libre)' },
-  ].filter(x => x.valor > 0), { titulo: libreP < 0 ? 'Faltarían' : 'Libre', valor: dinero(Math.abs(libreP)) });
+    { nombre: nom.gastos, valor: p.gasto, color: 'var(--c-gasto)' },
+    { nombre: nom.inversiones, valor: p.inversion, color: 'var(--c-inversion)' },
+    { nombre: nom.libre, valor: Math.max(libreP, 0), color: 'var(--c-libre)' },
+  ].filter(x => x.valor > 0), { titulo: libreP < 0 ? 'Faltarían' : nom.libre, valor: dinero(Math.abs(libreP)) });
 
   const fila = (nombre, valor, clase = '') =>
     `<div class="fila linea"><span>${nombre}</span><strong class="${clase}">${valor}</strong></div>`;
   $('proyeccion').innerHTML = `
-    <h1 class="titulo">Proyección de ${MESES[hoy.getMonth()]}</h1>
+    <h1 class="titulo">Proyección de ${MESES[hoy.getMonth()]}${estado.espacio ? ` · ${escapar(negocioPorId(estado.espacio).nombre)}` : ''}</h1>
     <section class="tarjeta">
       <h2>Lo que esperas en el mes</h2>
       ${reparto}
-      <p class="nota">Ingresos esperados ${dinero(p.ingreso)}. Sale de los presupuestos de abajo: cámbialos y la proyección se actualiza.</p>
+      <p class="nota">${nom.ingresos} esperados ${dinero(p.ingreso)}. Sale de los presupuestos de abajo: cámbialos y la proyección se actualiza.</p>
     </section>
     <section class="tarjeta">
       <h2>Si sigues a este ritmo</h2>
       ${fila(`Gastos al cierre (llevas ${dinero(r.gasto)} en ${hoy.getDate()} días)`, dinero(gastoCierre), gastoCierre > p.gasto ? 'critico' : 'gasto')}
       ${fila('Gastos presupuestados', dinero(p.gasto))}
-      ${fila('Ingresos del mes', dinero(ingresoCierre), 'ingreso')}
-      ${fila('Inversión del mes', dinero(inversionCierre), 'inversion')}
-      ${fila('Libre al cierre', dinero(libreCierre), libreCierre < 0 ? 'critico' : '')}
+      ${fila(`${nom.ingresos} del mes`, dinero(ingresoCierre), 'ingreso')}
+      ${fila(`${nom.inversiones} del mes`, dinero(inversionCierre), 'inversion')}
+      ${fila(`${nom.libre} al cierre`, dinero(libreCierre), libreCierre < 0 ? 'critico' : '')}
       <p class="nota">${p.gasto && gastoCierre > p.gasto
         ? `A este ritmo te pasarías ${dinero(gastoCierre - p.gasto)} del presupuesto de gastos. Para no pasarte, puedes gastar ${dinero(Math.round(Math.max(p.gasto - r.gasto, 0) / Math.max(totalDias - hoy.getDate(), 1)))} por día lo que queda del mes.`
         : p.gasto ? `En gastos vas bien: puedes gastar hasta ${dinero(Math.round((p.gasto - r.gasto) / Math.max(totalDias - hoy.getDate(), 1)))} por día lo que queda del mes.`
         : 'Pon presupuesto a tus conceptos de gasto para ver cuánto puedes gastar por día.'}
-        Ingresos e inversión cuentan lo presupuestado o lo ya anotado, lo que sea mayor.</p>
+        ${nom.ingresos} y ${nom.inversiones.toLowerCase()} cuentan lo presupuestado o lo ya anotado, lo que sea mayor.</p>
       ${libreP < 0 ? `<p class="nota critico">Tus presupuestos de gastos e inversión suman ${dinero(-libreP)} más que tus ingresos esperados. Baja alguno abajo para que el mes cuadre.</p>` : ''}
     </section>`;
   Graficos.activar($('proyeccion'));
@@ -455,8 +514,9 @@ async function pintarProyeccion() {
 function pintarAjustes() {
   pintarProyeccion();
   Voz.pintarAjustes();
+  pintarNegocios();
   const grupos = new Map();
-  for (const c of estado.conceptos) {
+  for (const c of conceptosDe()) {
     const clave = `${TIPOS[c.tipo].grupo} · ${c.categoria}`;
     if (!grupos.has(clave)) grupos.set(clave, []);
     grupos.get(clave).push(c);
@@ -472,15 +532,84 @@ function pintarAjustes() {
       </button></li>`).join('')}</ul>`).join('');
 }
 
+// ---------- Mis negocios ----------
+
+const widgetNativo = () => window.AndroidVoz && typeof AndroidVoz.ponerWidget === 'function';
+
+function pintarNegocios() {
+  const n = negocioPorId(estado.espacio);
+  $('negocios-lista').innerHTML = estado.negocios.map(x => `
+    <li><button type="button" class="mov" data-negocio="${escapar(x.id)}">
+      <span class="mov-icono">${escapar(x.icono)}</span>
+      <span class="mov-texto"><strong>${escapar(x.nombre)}</strong><small>${x.id === estado.espacio ? 'Lo estás viendo' : 'Toca para cambiar el nombre'}</small></span>
+    </button></li>`).join('');
+  $('nuevo-negocio').hidden = estado.negocios.length >= MAX_NEGOCIOS;
+  // El widget propio de cada espacio: en la app Android se pone con un toque.
+  $('poner-widget').hidden = !widgetNativo();
+  $('poner-widget').textContent = `Poner widget de ${n ? n.nombre : 'Personal'} en la pantalla`;
+  $('widget-nota').textContent = widgetNativo()
+    ? 'O mantén presionada la pantalla de inicio → Widgets → MIG, y elige para quién es.'
+    : 'En la app Android de MIG puedes poner un widget de voz para cada negocio.';
+}
+
+function abrirNegocio(n) {
+  estado.editandoNegocio = n;
+  const f = $('negocio-form');
+  f.nombre.value = n ? n.nombre : '';
+  f.icono.value = n ? n.icono : '';
+  $('negocio-titulo').textContent = n ? 'Negocio' : 'Nuevo negocio';
+  $('negocio-borrar').hidden = !n;
+  $('editor-negocio').showModal();
+}
+
+async function guardarNegocio() {
+  const f = $('negocio-form');
+  const previo = estado.editandoNegocio;
+  const n = {
+    ...(previo || { id: 'n' + Date.now().toString(36), orden: estado.negocios.length }),
+    nombre: f.nombre.value.trim().slice(0, 30),
+    icono: f.icono.value.trim() || '🏪',
+  };
+  await DB.guardarNegocio(n);
+  // Un negocio nuevo trae sus conceptos y se abre de una vez.
+  if (!previo) {
+    for (const c of DB.conceptosNegocio(n.id, estado.conceptos.length)) await DB.guardarConcepto(c);
+    elegirEspacio(n.id);
+  }
+  await cargarConceptos();
+  return n;
+}
+
+// Un negocio se borra solo si no tiene movimientos (como los conceptos); se van también sus conceptos.
+async function borrarNegocio() {
+  const n = estado.editandoNegocio;
+  const usados = (await DB.todos()).filter(x => negocioDe(x) === n.id).length;
+  if (usados) {
+    avisar(`«${n.nombre}» tiene ${usados} movimiento${usados > 1 ? 's' : ''}. Bórralos primero (abajo, "Empezar de cero" dentro del negocio).`);
+    return;
+  }
+  $('editor-negocio').close();
+  const suyos = conceptosDe(n.id);
+  for (const c of suyos) await DB.borrarConcepto(c.id);
+  await DB.borrarNegocio(n.id);
+  await cargarConceptos();
+  repintar();
+  avisar(`Negocio borrado: ${n.nombre}`, async () => {
+    await DB.guardarNegocio(n);
+    for (const c of suyos) await DB.guardarConcepto(c);
+    await cargarConceptos();
+  });
+}
+
 function abrirConcepto(c, nuevo = {}) {
   estado.editandoConcepto = c;
   const f = $('concepto-form');
-  const categorias = [...new Set(estado.conceptos.map(x => x.categoria))].sort();
+  const categorias = [...new Set(conceptosDe().map(x => x.categoria))].sort();
   $('lista-categorias').innerHTML = categorias.map(x => `<option value="${escapar(x)}">`).join('');
   const tipo = c ? c.tipo : nuevo.tipo || 'gasto';
   // Categoría propuesta: la más usada de ese tipo ("Otros" si empatan).
   const cuenta = {};
-  for (const x of estado.conceptos.filter(x => x.tipo === tipo)) cuenta[x.categoria] = (cuenta[x.categoria] || 0) + 1;
+  for (const x of conceptosDe().filter(x => x.tipo === tipo)) cuenta[x.categoria] = (cuenta[x.categoria] || 0) + 1;
   const comun = Object.keys(cuenta).sort((a, b) => cuenta[b] - cuenta[a] || (b === 'Otros') - (a === 'Otros'))[0] || '';
   f.nombre.value = c ? c.nombre : nuevo.nombre || '';
   f.icono.value = c ? c.icono : '';
@@ -510,7 +639,7 @@ async function guardarConcepto() {
     historial[mes] = ppto;
   }
   const c = {
-    ...(previo || { id: nuevoId(), orden: estado.conceptos.length, usos: 0 }),
+    ...(previo || { id: nuevoId(), orden: estado.conceptos.length, usos: 0, negocio: estado.espacio }),
     nombre: f.nombre.value.trim(),
     icono: f.icono.value.trim() || '•',
     tipo: f.tipo.value,
@@ -533,20 +662,21 @@ async function exportar() {
   for (const x of movs) {
     const c = concepto(x.concepto);
     meses.add(x.fecha.slice(0, 7));
-    filas.push([x.fecha.slice(0, 10), c.tipo, c.categoria, c.nombre, 0, x.monto, x.nota || '']);
+    filas.push([x.fecha.slice(0, 10), c.tipo, c.categoria, c.nombre, 0, x.monto, x.nota || '', negocioDe(x)]);
   }
   // Como en el Excel: una fila de presupuesto por concepto el día 1 de cada mes, con monto 0.
   for (const m of meses) {
     for (const c of estado.conceptos) {
-      if (presupuestoEn(c, m) > 0) filas.push([m + '-01', c.tipo, c.categoria, c.nombre, presupuestoEn(c, m), 0, '']);
+      if (presupuestoEn(c, m) > 0) filas.push([m + '-01', c.tipo, c.categoria, c.nombre, presupuestoEn(c, m), 0, '', negocioDe(c)]);
     }
   }
   filas.sort((a, b) => a[0].localeCompare(b[0]));
-  const datos = filas.map(([fecha, tipo, cat, con, ppto, monto, nota]) => [
+  // Columna Negocio: "Personal" o el nombre del negocio, para filtrar en Excel.
+  const datos = filas.map(([fecha, tipo, cat, con, ppto, monto, nota, neg]) => [
     { fecha }, MESES[Number(fecha.slice(5, 7)) - 1].replace(/^./, l => l.toUpperCase()), TIPOS[tipo].excel,
-    cat, con, ppto / 100, monto / 100, nota,
+    cat, con, ppto / 100, monto / 100, nota, neg ? (negocioPorId(neg) || { nombre: 'Negocio borrado' }).nombre : 'Personal',
   ]);
-  const encabezado = ['Fecha', 'Mes', 'Tipo', 'Categoria', 'Concepto', 'Presupuesto', 'Monto', 'Nota'];
+  const encabezado = ['Fecha', 'Mes', 'Tipo', 'Categoria', 'Concepto', 'Presupuesto', 'Monto', 'Nota', 'Negocio'];
   const blob = Excel.libro('Movimientos', [encabezado, ...datos]);
   const nombre = `finanzas-${fechaLocal().slice(0, 10)}.xlsx`;
   // En la app Android no hay descargas del navegador: el archivo se guarda en Descargas desde Java.
@@ -568,7 +698,8 @@ async function exportar() {
 function opcionesConcepto(tipo, elegido) {
   const sel = $('editor-form').concepto;
   const cats = new Map();
-  for (const c of estado.conceptos.filter(c => c.tipo === tipo)) {
+  const esp = negocioDe(estado.editando);
+  for (const c of conceptosDe(esp).filter(c => c.tipo === tipo)) {
     if (!cats.has(c.categoria)) cats.set(c.categoria, []);
     cats.get(c.categoria).push(c);
   }
@@ -588,9 +719,9 @@ function abrirEditor(mov) {
   $('editor-frase').textContent = mov.frase ? `Dijiste: «${mov.frase}»` : '';
   $('editor-frase').hidden = !mov.frase;
   // Si la frase nombra algo que no tiene concepto (por ejemplo tu negocio), se ofrece crearlo.
-  const dudosa = mov.ia === 'duda' && (!mov.concepto || mov.concepto === 'otros');
+  const dudosa = mov.ia === 'duda' && (!mov.concepto || /(^|-)otros$/.test(mov.concepto));
   const sugerido = mov.frase && dudosa ? Voz.nombreSugerido(mov.frase) : '';
-  const existe = estado.conceptos.some(c => c.nombre.toLowerCase() === sugerido.toLowerCase());
+  const existe = conceptosDe(negocioDe(mov)).some(c => c.nombre.toLowerCase() === sugerido.toLowerCase());
   $('editor-nuevo').textContent = `¿Es algo nuevo? + Crear concepto «${sugerido}»`;
   $('editor-nuevo').hidden = !sugerido || existe;
   $('editor-titulo').textContent = mov.estado === 'pendiente' ? 'Revisar y confirmar' : 'Editar movimiento';
@@ -628,8 +759,10 @@ async function guardarEdicion() {
 // Cuántas frases esperan revisión: se ve como un número sobre Movimientos.
 async function pintarPendientes() {
   const pendientes = (await DB.todos()).filter(x => x.estado === 'pendiente');
+  const aqui = pendientes.filter(x => delEspacio(x)).length;
   const b = document.querySelector('.nav-btn[data-vista="movimientos"]');
-  if (pendientes.length) b.dataset.cuenta = pendientes.length; else delete b.dataset.cuenta;
+  if (aqui) b.dataset.cuenta = aqui; else delete b.dataset.cuenta;
+  if (estado.negocios.length) pintarEspacios();
   // Si el widget está ordenando una frase por detrás, se mira de nuevo en un rato.
   clearTimeout(pintarPendientes.reloj);
   if (pendientes.some(x => x.ia === 'enviando')) {
@@ -828,18 +961,51 @@ $('concepto-form').addEventListener('submit', async e => {
 
 $('exportar').addEventListener('click', exportar);
 
+$('espacios').addEventListener('click', e => {
+  const b = e.target.closest('[data-espacio]');
+  if (!b || b.dataset.espacio === estado.espacio) return;
+  elegirEspacio(b.dataset.espacio);
+  estado.entrada = '';
+  estado.inicio = null;
+  pintarMonto();
+  pintarEspacios();
+  repintar();
+});
+$('nuevo-negocio').addEventListener('click', () => abrirNegocio(null));
+$('negocios-lista').addEventListener('click', e => {
+  const b = e.target.closest('[data-negocio]');
+  if (b) abrirNegocio(negocioPorId(b.dataset.negocio));
+});
+$('negocio-borrar').addEventListener('click', borrarNegocio);
+$('negocio-form').addEventListener('submit', async e => {
+  if (!e.submitter || e.submitter.value !== 'guardar') return;
+  e.preventDefault();
+  if (!$('negocio-form').nombre.value.trim()) { $('negocio-form').nombre.reportValidity(); return; }
+  const nuevo = !estado.editandoNegocio;
+  const n = await guardarNegocio();
+  $('editor-negocio').close();
+  repintar();
+  avisar(nuevo ? `Listo: ${n.nombre} tiene su propio panel. Arriba cambias entre Personal y el negocio.` : `Guardado: ${n.nombre}`);
+});
+$('poner-widget').addEventListener('click', () => {
+  const n = negocioPorId(estado.espacio);
+  AndroidVoz.ponerWidget(n ? n.id : '');
+});
+
 // Empezar de cero: borra los movimientos (con Deshacer); conceptos y presupuestos se quedan.
+// Con negocios, borra solo los del espacio que se está viendo (Personal o ese negocio).
 $('reiniciar').addEventListener('click', async () => {
-  const n = (await DB.todos()).length;
+  const n = (await DB.todos()).filter(x => delEspacio(x)).length;
   if (!n) { avisar('No hay movimientos que borrar.'); return; }
-  $('reinicio-texto').textContent = `Se borran ${n} movimiento${n > 1 ? 's' : ''}. Si quieres guardarlos, descarga antes el CSV.`;
+  const donde = estado.espacio ? ` de ${negocioPorId(estado.espacio).nombre}` : estado.negocios.length ? ' personales' : '';
+  $('reinicio-texto').textContent = `Se borran ${n} movimiento${n > 1 ? 's' : ''}${donde}. Si quieres guardarlos, descarga antes el CSV.`;
   $('confirmar-reinicio').returnValue = '';
   $('confirmar-reinicio').showModal();
 });
 $('confirmar-reinicio').addEventListener('close', async () => {
   if ($('confirmar-reinicio').returnValue !== 'borrar') return;
-  const copia = await DB.todos();
-  await DB.borrarTodos();
+  const copia = (await DB.todos()).filter(x => delEspacio(x));
+  for (const m of copia) await DB.borrar(m.id);
   repintar();
   avisar(`Listo: se borraron ${copia.length} movimientos.`, async () => {
     for (const m of copia) await DB.guardar(m);
