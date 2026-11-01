@@ -8,7 +8,7 @@ const Voz = (() => {
   const Reconocer = nativo ? null : window.SpeechRecognition || window.webkitSpeechRecognition;
   const ESPERA_MS = 25000;
   const ERRORES = {
-    'contraseña': 'La contraseña de la voz no coincide. Revísala en Proyección → Anotar por voz.',
+    'contraseña': 'La contraseña de la voz no coincide. Revísala en Proyección → ⚙️ Ajustes → Tu sesión.',
     'sin-clave-api': 'Falta guardar la clave de Anthropic en el Apps Script.',
     'clave-api': 'La clave de Anthropic no funciona. Crea otra y guárdala en el Apps Script.',
     saldo: 'Se acabó el saldo de la IA. Carga créditos en la consola de Claude.',
@@ -21,7 +21,7 @@ const Voz = (() => {
   function leer(k) { try { return localStorage.getItem(k) || ''; } catch { return ''; } }
   function escribir(k, v) { try { localStorage.setItem(k, v); } catch { /* sin almacenamiento */ } }
   // Enlace de la aplicación web del Apps Script de fer (no es secreto: lo protege la contraseña).
-  // Se puede cambiar en Proyección → Anotar por voz.
+  // Se puede cambiar en Proyección → ⚙️ Ajustes → Tu sesión.
   const URL_SERVIDOR = 'https://script.google.com/macros/s/AKfycbyxXIiCCKmZjdPKsmFEwgZ1oJ7UbtJdPVGMVc4YiX9p902HJTnkTxjFdnUjIivYgxo8Lw/exec';
   const ajustes = () => ({ url: leer('voz-url') || URL_SERVIDOR, clave: leer('voz-clave') });
   const configurada = () => { const a = ajustes(); return !!(a.url && a.clave); };
@@ -48,7 +48,7 @@ const Voz = (() => {
     const a = ajustes();
     f.url.value = a.url;
     f.clave.value = a.clave;
-    $('voz-estado').textContent = configurada() ? 'Lista en este teléfono.' : 'Escribe la contraseña de la app y toca Guardar y probar.';
+    $('voz-estado').textContent = configurada() ? 'Sesión iniciada en este teléfono: la voz está lista.' : 'Sin sesión: escribe tu contraseña en Avanzado.';
     $('cerrar-sesion').hidden = !configurada();
   }
 
@@ -131,7 +131,7 @@ const Voz = (() => {
 
   function escuchar() {
     if (!configurada()) {
-      avisar('Primero escribe la contraseña de la voz en Proyección → Anotar por voz.');
+      avisar('Primero escribe la contraseña de la voz en Proyección → ⚙️ Ajustes → Tu sesión.');
       return;
     }
     if (nativo) { nativo.escuchar(); return; }
