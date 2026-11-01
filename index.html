@@ -206,9 +206,12 @@
       <label>Nombre
         <input name="nombre" autocomplete="off" maxlength="30" required>
       </label>
-      <label>Icono (un emoji)
-        <input name="icono" autocomplete="off" placeholder="🏪">
-      </label>
+      <fieldset class="personajes">
+        <legend>Personaje (sale en su widget)</legend>
+        <label><input type="radio" name="personaje" value="hormiga"><img src="personaje-hormiga.png" alt=""><span>Hormiga</span></label>
+        <label><input type="radio" name="personaje" value="oso"><img src="personaje-oso.png" alt=""><span>Oso hormiguero</span></label>
+        <label><input type="radio" name="personaje" value="leon"><img src="personaje-leon.png" alt=""><span>León</span></label>
+      </fieldset>
       <div class="editor-botones">
         <button type="button" id="negocio-borrar" class="peligro">Borrar</button>
         <button value="cancelar" formnovalidate>Cancelar</button>

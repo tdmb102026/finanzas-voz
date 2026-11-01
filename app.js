@@ -39,7 +39,7 @@ const estado = {
   editando: null,
   editandoConcepto: null,
   vista: 'anotar',
-  negocios: [],       // hasta 3: { id, nombre, icono, orden }
+  negocios: [],       // hasta 3: { id, nombre, personaje, orden }
   espacio: leerEspacio(),  // '' = finanzas personales, o el id del negocio que se está viendo
   editandoNegocio: null,
 };
@@ -58,6 +58,14 @@ const NOMBRES = {
   personal: { gasto: 'Gasto', ingreso: 'Ingreso', inversion: 'Inversión', gastos: 'Gastos', ingresos: 'Ingresos', inversiones: 'Inversión', libre: 'Libre' },
   negocio: { gasto: 'Gasto', ingreso: 'Venta', inversion: 'Compra', gastos: 'Gastos', ingresos: 'Ventas', inversiones: 'Compras', libre: 'Ganancia' },
 };
+// Cada negocio tiene su personaje (también en su widget, con el nombre en una cinta dorada).
+const PERSONAJES = { hormiga: 'Hormiga', oso: 'Oso hormiguero', leon: 'León' };
+const imgPersonaje = (n, clase = '') => `<img class="${clase}" src="personaje-${escapar(n.personaje || 'hormiga')}.png" alt="">`;
+// El primer personaje que no usa otro negocio.
+function personajeLibre(menos) {
+  const usados = new Set(estado.negocios.filter(n => n !== menos).map(n => n.personaje));
+  return Object.keys(PERSONAJES).find(k => !usados.has(k)) || 'hormiga';
+}
 const nombres = (esp = estado.espacio) => (esp ? NOMBRES.negocio : NOMBRES.personal);
 
 // ---------- Utilidades ----------
@@ -112,6 +120,8 @@ const listos = movs => movs.filter(x => x.estado !== 'pendiente');
 async function cargarConceptos() {
   estado.conceptos = (await DB.conceptos()).sort((a, b) => a.orden - b.orden);
   estado.negocios = (await DB.negocios()).sort((a, b) => a.orden - b.orden);
+  // Negocios creados antes de los personajes: toman uno libre.
+  for (const n of estado.negocios) if (!PERSONAJES[n.personaje]) { n.personaje = personajeLibre(n); await DB.guardarNegocio(n); }
   if (estado.espacio && !negocioPorId(estado.espacio)) elegirEspacio('');
   pintarEspacios();
   contarAndroid();
@@ -134,15 +144,15 @@ async function pintarEspacios() {
   for (const x of await DB.todos()) if (x.estado === 'pendiente') pend[negocioDe(x)] = (pend[negocioDe(x)] || 0) + 1;
   const chip = (id, icono, nombre) => `<button type="button" class="espacio${id === estado.espacio ? ' activo' : ''}"
       data-espacio="${escapar(id)}"${id !== estado.espacio && pend[id] ? ` data-cuenta="${pend[id]}"` : ''}>
-      <span>${escapar(icono)}</span>${escapar(nombre)}</button>`;
-  $('espacios').innerHTML = chip('', '🐜', 'Personal')
-    + estado.negocios.map(n => chip(n.id, n.icono, n.nombre)).join('');
+      ${icono}${escapar(nombre)}</button>`;
+  $('espacios').innerHTML = chip('', '<span>🐜</span>', 'Personal')
+    + estado.negocios.map(n => chip(n.id, imgPersonaje(n), n.nombre)).join('');
 }
 
 // La app Android guarda la lista de negocios para que cada widget sepa a cuál anota.
 function contarAndroid() {
   if (window.AndroidVoz && typeof AndroidVoz.negocios === 'function') {
-    AndroidVoz.negocios(JSON.stringify(estado.negocios.map(n => ({ id: n.id, nombre: n.nombre, icono: n.icono }))));
+    AndroidVoz.negocios(JSON.stringify(estado.negocios.map(n => ({ id: n.id, nombre: n.nombre, personaje: n.personaje }))));
   }
 }
 
@@ -540,7 +550,7 @@ function pintarNegocios() {
   const n = negocioPorId(estado.espacio);
   $('negocios-lista').innerHTML = estado.negocios.map(x => `
     <li><button type="button" class="mov" data-negocio="${escapar(x.id)}">
-      <span class="mov-icono">${escapar(x.icono)}</span>
+      <span class="mov-icono">${imgPersonaje(x, 'personaje-lista')}</span>
       <span class="mov-texto"><strong>${escapar(x.nombre)}</strong><small>${x.id === estado.espacio ? 'Lo estás viendo' : 'Toca para cambiar el nombre'}</small></span>
     </button></li>`).join('');
   $('nuevo-negocio').hidden = estado.negocios.length >= MAX_NEGOCIOS;
@@ -556,7 +566,7 @@ function abrirNegocio(n) {
   estado.editandoNegocio = n;
   const f = $('negocio-form');
   f.nombre.value = n ? n.nombre : '';
-  f.icono.value = n ? n.icono : '';
+  f.personaje.value = n ? n.personaje : personajeLibre();
   $('negocio-titulo').textContent = n ? 'Negocio' : 'Nuevo negocio';
   $('negocio-borrar').hidden = !n;
   $('editor-negocio').showModal();
@@ -568,7 +578,7 @@ async function guardarNegocio() {
   const n = {
     ...(previo || { id: 'n' + Date.now().toString(36), orden: estado.negocios.length }),
     nombre: f.nombre.value.trim().slice(0, 30),
-    icono: f.icono.value.trim() || '🏪',
+    personaje: PERSONAJES[f.personaje.value] ? f.personaje.value : 'hormiga',
   };
   await DB.guardarNegocio(n);
   // Un negocio nuevo trae sus conceptos y se abre de una vez.

@@ -43,7 +43,7 @@ public class WidgetElegir extends Activity {
         for (int i = 0; i < negocios.length(); i++) {
             JSONObject n = negocios.optJSONObject(i);
             if (n == null) continue;
-            lista.addView(boton((n.optString("icono") + " " + n.optString("nombre")).trim(), n.optString("id")));
+            lista.addView(boton(n.optString("nombre"), n.optString("id")));
         }
         ScrollView marco = new ScrollView(this);
         marco.addView(lista);
