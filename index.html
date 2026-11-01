@@ -75,35 +75,58 @@
     <!-- Proyección del mes: presupuesto, cierre estimado, conceptos y exportar -->
     <section id="vista-ajustes" class="vista">
       <div id="proyeccion"></div>
-      <h1 class="titulo">Conceptos y presupuesto</h1>
-      <p class="nota">El presupuesto es mensual y se repite cada mes. Toca un concepto para cambiarlo.</p>
+      <h1 class="titulo">Presupuestos</h1>
+      <p class="nota">Cuánto esperas gastar, ganar o invertir cada mes. Toca uno para cambiarlo.</p>
       <div id="ajustes-lista"></div>
       <button type="button" id="nuevo-concepto" class="boton-ancho">+ Nuevo concepto</button>
-      <h1 class="titulo">Mis negocios</h1>
-      <p class="nota">Cada negocio (hasta 3) tiene su propio panel, conceptos, presupuesto y widget, aparte de tus finanzas personales. Cambias entre ellos arriba.</p>
-      <ul id="negocios-lista" class="lista"></ul>
-      <button type="button" id="nuevo-negocio" class="boton-ancho">+ Agregar negocio</button>
-      <button type="button" id="poner-widget" class="boton-ancho" hidden></button>
-      <p id="widget-nota" class="nota"></p>
-      <h1 class="titulo">Anotar por voz</h1>
-      <p class="nota">Dices "gasté 30 en el súper" y la IA lo ordena. Se configura una vez por teléfono, con el enlace y la contraseña de tu Apps Script (la clave de Anthropic se queda allá, nunca aquí).</p>
-      <form id="voz-form" class="campos">
-        <label>Enlace del Apps Script (termina en /exec)
-          <input name="url" type="url" inputmode="url" autocomplete="off" placeholder="https://script.google.com/macros/s/…/exec">
-        </label>
-        <label>Contraseña de la app
-          <input name="clave" type="password" autocomplete="off">
-        </label>
-        <button class="boton-ancho">Guardar y probar</button>
-        <p id="voz-estado" class="nota" role="status"></p>
-      </form>
-      <button type="button" id="cerrar-sesion" class="boton-ancho peligro" hidden>Cerrar sesión</button>
-      <h1 class="titulo">Exportar</h1>
-      <p class="nota">Descarga todos los movimientos con las columnas de tu Excel: Fecha, Mes, Tipo, Categoria, Concepto, Presupuesto, Monto.</p>
-      <button type="button" id="exportar" class="boton-ancho">Descargar CSV para Excel</button>
-      <h1 class="titulo">Empezar de cero</h1>
-      <p class="nota">Borra todos los movimientos, también los por revisar. Tus conceptos, presupuestos y lo que aprendió la voz se quedan. Cada mes ya empieza solo en cero; esto es para limpiar las pruebas.</p>
-      <button type="button" id="reiniciar" class="boton-ancho peligro">Borrar todos los movimientos</button>
+    </section>
+
+    <!-- Ajustes: lo que se toca poco, aparte de la proyección para que no estorbe -->
+    <section id="vista-config" class="vista">
+      <header class="proy-cabeza">
+        <button type="button" id="volver-proyeccion" class="engranaje" aria-label="Volver">‹ Proyección</button>
+        <h1 class="titulo">Ajustes</h1>
+      </header>
+
+      <section class="tarjeta">
+        <h2>Mis negocios</h2>
+        <p class="nota arriba">Cada negocio (hasta 3) tiene sus propios conceptos, resumen y widget. Cambias entre Personal y tus negocios en la fila de arriba.</p>
+        <ul id="negocios-lista" class="lista"></ul>
+        <button type="button" id="nuevo-negocio" class="boton-ancho">+ Agregar negocio</button>
+        <button type="button" id="poner-widget" class="boton-ancho" hidden></button>
+        <p id="widget-nota" class="nota"></p>
+      </section>
+
+      <section class="tarjeta">
+        <h2>Descargar a Excel</h2>
+        <p class="nota arriba">Todos tus movimientos, personales y de negocios, con las columnas de tu Excel.</p>
+        <button type="button" id="exportar" class="boton-ancho">Descargar Excel</button>
+      </section>
+
+      <section class="tarjeta">
+        <h2>Tu sesión</h2>
+        <p id="voz-estado" class="nota arriba" role="status"></p>
+        <button type="button" id="cerrar-sesion" class="boton-ancho peligro" hidden>Cerrar sesión</button>
+        <details class="avanzado">
+          <summary>Avanzado: servidor de la voz</summary>
+          <p class="nota">Solo si cambias el Apps Script. La clave de Anthropic se queda allá, nunca aquí.</p>
+          <form id="voz-form" class="campos">
+            <label>Enlace del Apps Script (termina en /exec)
+              <input name="url" type="url" inputmode="url" autocomplete="off" placeholder="https://script.google.com/macros/s/…/exec">
+            </label>
+            <label>Contraseña de la app
+              <input name="clave" type="password" autocomplete="off">
+            </label>
+            <button class="boton-ancho">Guardar y probar</button>
+          </form>
+        </details>
+      </section>
+
+      <section class="tarjeta peligro-zona">
+        <h2>Empezar de cero</h2>
+        <p class="nota arriba">Borra los movimientos de lo que estás viendo (Personal o el negocio elegido). Conceptos y presupuestos se quedan. Sirve para limpiar pruebas: cada mes ya empieza solo en cero.</p>
+        <button type="button" id="reiniciar" class="boton-ancho peligro">Borrar movimientos</button>
+      </section>
     </section>
   </main>
 

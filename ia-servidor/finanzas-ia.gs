@@ -146,6 +146,8 @@ Reglas:
   a un cliente → el concepto de ventas; comprar mercadería, productos o inventario para vender ("compramos 30 carros
   en 80") → el concepto de mercadería o compras; pasajes, envíos, publicidad y demás → su gasto del negocio.
   Si dice cuántas unidades, ponlo en la nota (por ejemplo "30 carros").
+- "Vendí X menos Y del envío" (o "vendí X y gasté Y en envío") son DOS movimientos: la venta por X completo y el gasto
+  de envío por Y. No restes los montos: la app calcula la ganancia sola.
 - Si la frase no es un gasto, ingreso o inversión (por ejemplo "hola" o "pagué lo de siempre"), devuelve la lista vacía.`;
 
 function esquema_(ids) {
