@@ -35,3 +35,9 @@
 - Anotar: "＋ Nuevo concepto" (punteado) entre el teclado y los conceptos; crea uno del tipo elegido en el espacio actual.
 - Deslizar a los lados (fer, 2026-11-01): cambia entre Personal y los negocios, dando la vuelta (`cambiarEspacio`). No empieza a menos de 32 px del borde (Atrás de Android) ni con ventanas abiertas.
 - (2026-11-01, fer) Proyección amigable: medidores "llevas X de Y" para gastos (con cuánto queda y por día), ingresos e inversión, y "Al terminar el mes te quedarían" (máx(real, ppto) de cada tipo). Presupuestos muestran "llevas $X". Barra de abajo con 5 botones: Ajustes (vista `config`) ya no es engranaje. "＋ Negocio" va en la fila de arriba (siempre visible), no en Ajustes. Historial de meses en Resumen (tocar un mes lo abre); tocar un concepto en Resumen edita el presupuesto de ese mes (mes pasado: solo ese mes, salvo "También para los meses siguientes"). Deslizar también en Movimientos, salvo deslizar a la izquierda sobre una fila (borra).
+- (2026-11-01, fer: "hazlos todos") En Proyección, debajo de los medidores (`cuentas.js`, `#herramientas`):
+  - Metas de ahorro: un concepto de inversión con `meta` (centavos) junta lo de todos los meses.
+  - Deudas y préstamos: tabla `deudas` (IndexedDB v7) {persona, sentido 'medeben'|'debo', monto, abonos[]}. Van aparte y no cuentan como gasto ni ingreso.
+  - Fijos del mes: un concepto con `fijo` (día) se anota solo ese día por su presupuesto. `fijoHecho` = último mes anotado, así un movimiento borrado no vuelve. Si el día ya pasó al marcarlo, empieza el mes siguiente. Avisa 1–2 días antes, una vez al día.
+  - Pasar plata (Anotar → "⇄ Pasar plata", solo con negocios): dos movimientos `tipo: 'traspaso'` (sentido sale/entra, unidos por `par`). En Personal cambian Libre; en un negocio no cambian la Ganancia (`entreEspacios`).
+  - La voz manda `deudas` abiertas y `espacios`; el .gs devuelve también `deudas` y `traspasos`. Un Apps Script viejo sigue funcionando, pero sin eso.

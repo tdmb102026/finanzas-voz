@@ -8,7 +8,7 @@ const Voz = (() => {
   const Reconocer = nativo ? null : window.SpeechRecognition || window.webkitSpeechRecognition;
   const ESPERA_MS = 25000;
   const ERRORES = {
-    'contraseña': 'La contraseña de la voz no coincide. Revísala en Proyección → ⚙️ Ajustes → Tu sesión.',
+    'contraseña': 'La contraseña de la voz no coincide. Revísala en Ajustes → Tu sesión.',
     'sin-clave-api': 'Falta guardar la clave de Anthropic en el Apps Script.',
     'clave-api': 'La clave de Anthropic no funciona. Crea otra y guárdala en el Apps Script.',
     saldo: 'Se acabó el saldo de la IA. Carga créditos en la consola de Claude.',
@@ -21,7 +21,7 @@ const Voz = (() => {
   function leer(k) { try { return localStorage.getItem(k) || ''; } catch { return ''; } }
   function escribir(k, v) { try { localStorage.setItem(k, v); } catch { /* sin almacenamiento */ } }
   // Enlace de la aplicación web del Apps Script de fer (no es secreto: lo protege la contraseña).
-  // Se puede cambiar en Proyección → ⚙️ Ajustes → Tu sesión.
+  // Se puede cambiar en Ajustes → Tu sesión.
   const URL_SERVIDOR = 'https://script.google.com/macros/s/AKfycbyxXIiCCKmZjdPKsmFEwgZ1oJ7UbtJdPVGMVc4YiX9p902HJTnkTxjFdnUjIivYgxo8Lw/exec';
   const ajustes = () => ({ url: leer('voz-url') || URL_SERVIDOR, clave: leer('voz-clave') });
   const configurada = () => { const a = ajustes(); return !!(a.url && a.clave); };
@@ -131,7 +131,7 @@ const Voz = (() => {
 
   function escuchar() {
     if (!configurada()) {
-      avisar('Primero escribe la contraseña de la voz en Proyección → ⚙️ Ajustes → Tu sesión.');
+      avisar('Primero escribe la contraseña de la voz en Ajustes → Tu sesión.');
       return;
     }
     if (nativo) { nativo.escuchar(); return; }
@@ -209,7 +209,7 @@ const Voz = (() => {
     avisar(`Anotando: «${frase}»…`);
     const r = await clasificar(mov);
     const texto = mensaje(r, frase);
-    avisar(texto, () => deshacerTodo(r.movs));
+    avisar(texto, () => deshacerTodo(r.movs, r.extras));
     repintar();
     pintarPendientes();
     return texto;
@@ -219,16 +219,20 @@ const Voz = (() => {
     const listos = r.movs.filter(m => m.estado === 'listo');
     if (r.error === 'sin-red') return 'Sin señal: queda guardado y se ordena solo al volver el internet.';
     if (r.error) return ERRORES[r.error] || 'La IA dio un error: queda en Movimientos para revisar.';
-    if (!listos.length) return `Para revisar en Movimientos: «${frase}»`;
+    // Deudas y plata entre espacios dichas por voz.
+    const extras = (r.extras || []).map(x => x.texto).join('. ');
+    if (!listos.length) return extras ? extras + (r.movs.length ? ' (revisa los pendientes)' : '') : `Para revisar en Movimientos: «${frase}»`;
     const m = listos[0], c = concepto(m.concepto);
     const resto = r.movs.length - 1;
     const n = negocioPorId(negocioDe(m));
     return `Anotado${n ? ' en ' + n.nombre : ''}: ${nombres(negocioDe(m))[m.tipo].toLowerCase()} ${dinero(m.monto)}, ${c.nombre.toLowerCase()}`
       + (resto ? ` y ${resto} más` : '')
+      + (extras ? '. ' + extras : '')
       + (listos.length < r.movs.length ? ' (revisa los pendientes)' : '');
   }
 
-  async function deshacerTodo(movs) {
+  async function deshacerTodo(movs, extras = []) {
+    for (const x of extras) await x.deshacer();
     for (const m of movs) {
       await DB.borrar(m.id);
       if (m.estado === 'listo') {
@@ -262,17 +266,27 @@ const Voz = (() => {
       ejemplos: ejemplos().filter(x => suyos.some(c => c.id === x.concepto)),
       // Nombre del negocio, para que la IA sepa que no son gastos personales (vacío = personal).
       negocio: esp ? negocioPorId(esp).nombre : '',
+      // Para "le presté 50 a Juan", "Juan me pagó 20" o "saqué 100 del negocio para mí".
+      deudas: await Cuentas.abiertasParaIA(esp),
+      espacios: estado.negocios.length ? ['Personal', ...estado.negocios.map(n => n.nombre)] : [],
+      espacio: esp ? negocioPorId(esp).nombre : 'Personal',
     });
     if (!j.ok) {
       const m = { ...mov, ia: j.error === 'sin-red' ? 'falta' : 'error' };
       await DB.guardar(m);
       return { movs: [m], error: j.error };
     }
-    if (!j.movimientos.length) {
+    // Un Apps Script viejo solo devuelve movimientos: lo demás llega vacío.
+    const deudas = Array.isArray(j.deudas) ? j.deudas : [], traspasos = Array.isArray(j.traspasos) ? j.traspasos : [];
+    if (!j.movimientos.length && !deudas.length && !traspasos.length) {
       const m = { ...mov, ia: 'duda' };
       await DB.guardar(m);
       return { movs: [m] };
     }
+    const extras = [];
+    let fallidos = 0;
+    for (const x of deudas) { const e = await Cuentas.deudaDeVoz(x, esp, mov.fecha); if (e) extras.push(e); else fallidos++; }
+    for (const x of traspasos) { const e = await Cuentas.traspasoDeVoz(x, mov.fecha); if (e) extras.push(e); else fallidos++; }
     const movs = [];
     for (const [i, x] of j.movimientos.entries()) {
       const c = suyos.find(k => k.id === x.concepto);
@@ -295,7 +309,15 @@ const Voz = (() => {
       if (listo) { c.usos = (c.usos || 0) + 1; await DB.guardarConcepto(c); }
       movs.push(m);
     }
-    return { movs };
+    // Lo que no se pudo anotar (por ejemplo un pago de alguien sin deuda) queda la frase para revisar.
+    if (fallidos || !extras.length && !movs.length) {
+      const m = { ...mov, id: movs.length ? nuevoId() : mov.id, ia: 'duda' };
+      await DB.guardar(m);
+      movs.push(m);
+    } else if (!movs.length) {
+      await DB.borrar(mov.id);
+    }
+    return { movs, extras };
   }
 
   // Las frases que no llegaron a la IA (sin señal) se mandan al volver el internet.

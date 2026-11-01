@@ -148,11 +148,22 @@ Reglas:
   Si dice cuántas unidades, ponlo en la nota (por ejemplo "30 carros").
 - "Vendí X menos Y del envío" (o "vendí X y gasté Y en envío") son DOS movimientos: la venta por X completo y el gasto
   de envío por Y. No restes los montos: la app calcula la ganancia sola.
-- Si la frase no es un gasto, ingreso o inversión (por ejemplo "hola" o "pagué lo de siempre"), devuelve la lista vacía.`;
+- Ahorrar o guardar plata para algo ("guardé 20 para el viaje") → el concepto de ahorro o la meta con ese nombre (tipo inversión).
+- Deudas y préstamos van en "deudas", NO en movimientos: prestar plata o fiar ("le presté 50 a Juan", "le fié 20 al vecino") → sentido me_deben, accion nueva;
+  pedir prestado o quedar debiendo ("Juan me prestó 100", "le debo 30 a María") → sentido debo, accion nueva;
+  un pago de una deuda ("Juan me pagó 20", "me devolvió 10", "le pagué 30 a María de lo que le debía", "aboné 50 a la tarjeta")
+  → accion pago, con el mismo sentido de la deuda (si alguien te paga, me_deben; si tú pagas lo que debías, debo).
+  Mira la lista de "deudas abiertas": si la persona que paga o a quien pagas está ahí, es un pago de esa deuda (usa su nombre igual).
+  "Le pagué 30 a María" sin deuda abierta con María y sin decir que le debía es un gasto normal, no una deuda.
+  persona: el nombre como lo dijo, con mayúscula ("Juan", "la tarjeta"). seguro en false si falta el monto o la persona.
+- Pasar plata entre la persona y su negocio va en "traspasos" (solo si hay lista de espacios), NO en movimientos:
+  "saqué 100 del negocio para mí" → de: el negocio, a: "Personal"; "puse 200 de mi plata en el negocio" → de: "Personal", a: el negocio.
+  Usa los nombres exactos de la lista de espacios; si hay un solo negocio, "el negocio" es ese. Si no sabes cuál, seguro en false.
+- Si la frase no es un gasto, ingreso, inversión, deuda ni traspaso (por ejemplo "hola" o "pagué lo de siempre"), devuelve las listas vacías.`;
 
-function esquema_(ids) {
+function esquema_(ids, espacios) {
   const obj = props => ({ type: "object", additionalProperties: false, required: Object.keys(props), properties: props });
-  return obj({
+  const campos = {
     movimientos: { type: "array", items: obj({
       concepto: { type: "string", enum: ids },
       monto: { type: "number", description: "Dólares, con centavos si los hay" },
@@ -160,7 +171,22 @@ function esquema_(ids) {
       nota: { type: "string" },
       seguro: { type: "boolean" },
     }) },
-  });
+    deudas: { type: "array", items: obj({
+      persona: { type: "string" },
+      sentido: { type: "string", enum: ["me_deben", "debo"] },
+      accion: { type: "string", enum: ["nueva", "pago"] },
+      monto: { type: "number" },
+      seguro: { type: "boolean" },
+    }) },
+  };
+  // Plata entre Personal y los negocios: solo si la persona tiene negocios.
+  if (espacios.length > 1) campos.traspasos = { type: "array", items: obj({
+    de: { type: "string", enum: espacios },
+    a: { type: "string", enum: espacios },
+    monto: { type: "number" },
+    seguro: { type: "boolean" },
+  }) };
+  return obj(campos);
 }
 
 // La app manda [{id, nombre, tipo, categoria}]; se limpia por si acaso.
@@ -180,17 +206,19 @@ function ejemplos_(lista, ids) {
     .map(x => `«${String(x.frase || "").slice(0, 200)}» → ${x.concepto}, ${Number(x.monto) || 0}`);
 }
 
-function claude_(frase, conceptos, hoy, ejemplos, negocio) {
+function claude_(frase, conceptos, hoy, ejemplos, negocio, deudas, espacios, espacio) {
   const key = PropertiesService.getScriptProperties().getProperty("ANTHROPIC_API_KEY");
   if (!key) return { ok: false, error: "sin-clave-api" };
   const lista = conceptos.map(c => `${c.id} | ${c.nombre} | ${c.tipo} | ${c.categoria}`).join("\n");
   const cuerpo = {
     model: MODELO, max_tokens: 4000,
-    output_config: { effort: "low", format: { type: "json_schema", schema: esquema_(conceptos.map(c => c.id)) } },
+    output_config: { effort: "low", format: { type: "json_schema", schema: esquema_(conceptos.map(c => c.id), espacios) } },
     system: SISTEMA,
     messages: [{ role: "user", content: `Conceptos (id | nombre | tipo | categoría):\n${lista}\n\n`
       + (ejemplos.length ? `Ejemplos corregidos por la persona:\n${ejemplos.join("\n")}\n\n` : "")
       + (negocio ? `Estos movimientos son del negocio «${negocio}», no gastos personales.\n` : "")
+      + (deudas.length ? `Deudas abiertas:\n${deudas.join("\n")}\n` : "Deudas abiertas: ninguna.\n")
+      + (espacios.length > 1 ? `Espacios: ${espacios.join(", ")}. La frase se dijo en «${espacio}».\n` : "")
       + `Hoy es ${hoy}.\nFrase: «${frase}»` }],
   };
   const r = UrlFetchApp.fetch("https://api.anthropic.com/v1/messages", {
@@ -205,13 +233,15 @@ function claude_(frase, conceptos, hoy, ejemplos, negocio) {
   if (j.stop_reason === "refusal") return { ok: false, error: "rechazo" };
   const t = (j.content || []).filter(b => b.type === "text")[0];
   if (!t) return { ok: false, error: "vacio" };
-  return { ok: true, movimientos: JSON.parse(t.text).movimientos || [], uso: j.usage };
+  const o = JSON.parse(t.text);
+  return { ok: true, movimientos: o.movimientos || [], deudas: o.deudas || [], traspasos: o.traspasos || [], uso: j.usage };
 }
 
 // ---------- aplicación web ----------
 function json_(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
 function doGet() { return json_({ ok: true, servicio: "finanzas-ia" }); }
-// El celular manda { clave, tipo: "probar" | "frase", frase, hoy: "lunes 2026-10-26", conceptos, ejemplos, negocio }
+// El celular manda { clave, tipo: "probar" | "frase", frase, hoy: "lunes 2026-10-26", conceptos, ejemplos, negocio,
+//   deudas: ["Juan: le debe a la persona 30.00"], espacios: ["Personal", "Tienda"], espacio: "Personal" }
 function doPost(e) {
   try {
     const q = JSON.parse(e.postData.contents);
@@ -222,8 +252,13 @@ function doPost(e) {
     const conceptos = conceptos_(q.conceptos);
     if (!frase || !conceptos.length) return json_({ ok: false, error: "pedido" });
     const negocio = String(q.negocio || "").slice(0, 40);
-    const r = claude_(frase, conceptos, String(q.hoy || "").slice(0, 40), ejemplos_(q.ejemplos, conceptos.map(c => c.id)), negocio);
-    anotarHoja_(persona, (negocio ? "[" + negocio + "] " : "") + frase, r.ok ? r.movimientos : r, r.uso);
+    const texto = (l, n, largo) => (Array.isArray(l) ? l : []).slice(0, n).map(x => String(x).slice(0, largo)).filter(Boolean);
+    const deudas = texto(q.deudas, 50, 120);
+    const espacios = [...new Set(texto(q.espacios, 4, 40))];
+    const espacio = String(q.espacio || "Personal").slice(0, 40);
+    const r = claude_(frase, conceptos, String(q.hoy || "").slice(0, 40), ejemplos_(q.ejemplos, conceptos.map(c => c.id)), negocio, deudas, espacios, espacio);
+    const anotado = r.ok ? { movimientos: r.movimientos, deudas: r.deudas, traspasos: r.traspasos } : r;
+    anotarHoja_(persona, (negocio ? "[" + negocio + "] " : "") + frase, anotado, r.uso);
     delete r.uso;
     return json_(r);
   } catch (err) {

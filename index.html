@@ -49,7 +49,10 @@
 
       <div class="conceptos-cabeza">
         <span>Conceptos</span>
-        <button type="button" id="anotar-nuevo-concepto" class="mini-nuevo">＋ Nuevo concepto</button>
+        <span class="mini-botones">
+          <button type="button" id="anotar-traspaso" class="mini-nuevo" hidden>⇄ Pasar plata</button>
+          <button type="button" id="anotar-nuevo-concepto" class="mini-nuevo">＋ Nuevo concepto</button>
+        </span>
       </div>
       <div id="conceptos" class="conceptos"></div>
     </section>
@@ -79,6 +82,7 @@
     <!-- Proyección del mes: presupuesto, cierre estimado, conceptos y exportar -->
     <section id="vista-ajustes" class="vista">
       <div id="proyeccion"></div>
+      <div id="herramientas"></div>
       <h1 class="titulo">Presupuestos</h1>
       <p class="nota">Cuánto esperas gastar, ganar o invertir cada mes. Toca uno para cambiarlo.</p>
       <div id="ajustes-lista"></div>
@@ -215,6 +219,13 @@
         <input name="presupuesto" inputmode="decimal" autocomplete="off">
       </label>
       <label class="check" id="ppto-siguientes" hidden><input type="checkbox" name="siguientes"> También para los meses siguientes</label>
+      <label id="campo-meta">Meta total de ahorro ($, opcional)
+        <input name="meta" inputmode="decimal" autocomplete="off" placeholder="Por ejemplo 500">
+      </label>
+      <label>Se anota solo cada mes, el día (opcional)
+        <input name="fijo" type="number" inputmode="numeric" min="1" max="31" autocomplete="off" placeholder="Por ejemplo 5">
+      </label>
+      <p id="fijo-nota" class="nota" hidden>Se anota solo por el presupuesto del mes. Si el día ya pasó este mes, empieza el próximo.</p>
       <label class="check"><input type="checkbox" name="oculto"> Ocultar en Anotar</label>
       <div class="editor-botones">
         <button type="button" id="concepto-borrar" class="peligro">Borrar</button>
@@ -239,6 +250,65 @@
       </fieldset>
       <div class="editor-botones">
         <button type="button" id="negocio-borrar" class="peligro">Borrar</button>
+        <button value="cancelar" formnovalidate>Cancelar</button>
+        <button value="guardar" class="principal">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="editor-deuda">
+    <form method="dialog" id="deuda-form">
+      <h2 id="deuda-titulo">Deuda o préstamo</h2>
+      <fieldset class="sentido">
+        <label><input type="radio" name="sentido" value="medeben"><span>📥 Me deben<small>yo presté</small></span></label>
+        <label><input type="radio" name="sentido" value="debo"><span>📤 Yo debo<small>me prestaron</small></span></label>
+      </fieldset>
+      <label>¿Quién?
+        <input name="persona" autocomplete="off" maxlength="40" required placeholder="Por ejemplo Juan">
+      </label>
+      <label>Monto total ($)
+        <input name="monto" inputmode="decimal" autocomplete="off">
+      </label>
+      <label>Nota
+        <input name="nota" autocomplete="off" placeholder="Por ejemplo tarjeta de crédito">
+      </label>
+      <div id="deuda-pagos" hidden>
+        <p id="deuda-saldo" class="nota"></p>
+        <ul id="deuda-abonos" class="abonos"></ul>
+        <div id="deuda-abonar-fila" class="abonar">
+          <input name="abono" inputmode="decimal" autocomplete="off" placeholder="Pago ($)" aria-label="Pago">
+          <button type="button" id="deuda-abonar" class="principal">Anotar pago</button>
+        </div>
+      </div>
+      <div class="editor-botones">
+        <button type="button" id="deuda-borrar" class="peligro">Borrar</button>
+        <button value="cancelar" formnovalidate>Cancelar</button>
+        <button value="guardar" class="principal">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="editor-traspaso">
+    <form method="dialog" id="traspaso-form">
+      <h2 id="traspaso-titulo">Pasar plata</h2>
+      <p class="nota">Por ejemplo, sacar plata del negocio para ti. No es gasto ni ingreso: sale de un lado y entra en el otro.</p>
+      <label>Monto ($)
+        <input name="monto" inputmode="decimal" autocomplete="off">
+      </label>
+      <label>Sale de
+        <select name="de"></select>
+      </label>
+      <label>Entra a
+        <select name="a"></select>
+      </label>
+      <label>Fecha
+        <input name="fecha" type="datetime-local" required>
+      </label>
+      <label>Nota
+        <input name="nota" autocomplete="off">
+      </label>
+      <div class="editor-botones">
+        <button type="button" id="traspaso-borrar" class="peligro">Borrar</button>
         <button value="cancelar" formnovalidate>Cancelar</button>
         <button value="guardar" class="principal">Guardar</button>
       </div>
@@ -274,6 +344,7 @@
   <script src="excel.js"></script>
   <script src="graficos.js"></script>
   <script src="app.js"></script>
+  <script src="cuentas.js"></script>
   <script src="voz.js"></script>
 </body>
 </html>
