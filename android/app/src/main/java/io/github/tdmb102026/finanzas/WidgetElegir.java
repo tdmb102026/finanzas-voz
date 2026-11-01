@@ -27,6 +27,9 @@ public class WidgetElegir extends Activity {
         if (extras != null) id = extras.getInt(AppWidgetManager.EXTRA_APPWIDGET_ID, id);
         if (id == AppWidgetManager.INVALID_APPWIDGET_ID) { finish(); return; }
 
+        // Puesto desde "Poner widget de X en la pantalla": ya se sabe de quién es, no se pregunta.
+        String pedido = WidgetVoz.tomarPedido(this);
+        if (pedido != null) { listo(pedido); return; }
         JSONArray negocios = WidgetVoz.negocios(this);
         if (negocios.length() == 0) { listo(""); return; }
 
