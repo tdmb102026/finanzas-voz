@@ -1,6 +1,6 @@
 // Guardado local en el teléfono (IndexedDB). Funciona sin internet.
 const DB = (() => {
-  const NOMBRE = 'finanzas', VERSION = 6;
+  const NOMBRE = 'finanzas', VERSION = 7;
 
   // Conceptos iniciales, tomados del Excel de fer. Presupuesto mensual en centavos.
   const CONCEPTOS_INICIALES = [
@@ -103,6 +103,8 @@ const DB = (() => {
         if (e.oldVersion === 4) aGastosHormiga(tx);
         // Versión 6: negocios (hasta 3). Movimientos y conceptos sin campo negocio son personales.
         if (e.oldVersion < 6) db.createObjectStore('negocios', { keyPath: 'id' });
+        // Versión 7: deudas y préstamos (lo que debes y lo que te deben), aparte de los movimientos.
+        if (e.oldVersion < 7) db.createObjectStore('deudas', { keyPath: 'id' });
       };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
@@ -134,6 +136,10 @@ const DB = (() => {
     negocios: () => operar('negocios', 'readonly', t => t.getAll()),
     guardarNegocio: n => operar('negocios', 'readwrite', t => t.put(n)),
     borrarNegocio: id => operar('negocios', 'readwrite', t => t.delete(id)),
+    // Deuda: { id, persona, sentido: 'medeben' | 'debo', monto, abonos: [{ fecha, monto }], fecha, nota, negocio }
+    deudas: () => operar('deudas', 'readonly', t => t.getAll()),
+    guardarDeuda: d => operar('deudas', 'readwrite', t => t.put(d)),
+    borrarDeuda: id => operar('deudas', 'readwrite', t => t.delete(id)),
     // Conceptos que trae un negocio nuevo: lo que suele pasar en un negocio pequeño de ventas.
     conceptosNegocio: (negocio, orden) => [
       ['ventas', 'Ventas', 'ingreso', 'Ventas', '💵'],

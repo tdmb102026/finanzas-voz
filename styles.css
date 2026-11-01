@@ -615,3 +615,32 @@ dialog .personajes label:has(input:checked) { border-color: var(--acento); backg
 .concepto-fila[data-concepto] { cursor: pointer; }
 /* "+ Negocio" en la fila de arriba */
 .espacio.nuevo-negocio { border-style: dashed; border-color: var(--acento); color: var(--acento); background: transparent; }
+
+/* Herramientas de Proyección: metas, deudas, fijos; y pasar plata entre espacios */
+[hidden] { display: none !important; }
+.mini-botones { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.herramienta .mini-nuevo { margin-top: 10px; }
+.herramienta .lista { margin: 0; }
+.metas li + li { margin-top: 10px; }
+.meta { display: block; width: 100%; border: 0; background: none; padding: 0; text-align: left; color: var(--texto); }
+.meta .fila strong { font-variant-numeric: tabular-nums; }
+.meta .barra { margin: 6px 0 4px; }
+.meta small { color: var(--suave); font-size: 12.5px; }
+.deuda-totales { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 6px; }
+.deuda-totales div { background: var(--tecla); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; }
+.deuda-totales span { font-size: 12.5px; color: var(--suave); }
+.deuda-totales strong { font-size: 18px; font-variant-numeric: tabular-nums; }
+.deuda-totales .ingreso, .mov.deuda.medeben .mov-monto, .mov.traspaso.ingreso .mov-monto { color: var(--ingreso); }
+.deuda-totales .gasto, .mov.deuda.debo .mov-monto { color: var(--gasto); }
+.mov.traspaso .mov-icono { font-size: 20px; font-weight: 700; color: var(--acento); }
+.sentido { border: 0; padding: 0; margin: 0 0 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+dialog .sentido label { margin: 0; border: 2px solid var(--borde); border-radius: 12px; padding: 8px; text-align: center; color: var(--texto); font-size: 15px; font-weight: 600; cursor: pointer; }
+.sentido input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.sentido small { display: block; font-weight: 400; font-size: 12px; color: var(--suave); }
+dialog .sentido label:has(input:checked) { border-color: var(--acento); background: var(--tecla); }
+.abonos { list-style: none; padding: 0; margin: 0 0 8px; font-size: 14px; }
+.abonos li { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--borde); }
+.abonar { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+dialog .abonar input { margin: 0; flex: 1; }
+.abonar button { white-space: nowrap; font: inherit; }
+.abonar button { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--acento); background: var(--acento); color: var(--sobre-acento); font-weight: 600; }

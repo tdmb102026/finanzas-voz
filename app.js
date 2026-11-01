@@ -9,6 +9,7 @@ const TIPOS = {
   gasto: { texto: 'gasto', excel: 'Egreso', grupo: 'Gasto' },
   ingreso: { texto: 'ingreso', excel: 'Ingreso', grupo: 'Ingreso' },
   inversion: { texto: 'inversión', excel: 'Inversión', grupo: 'Inversión' },
+  traspaso: { texto: 'entre espacios', excel: 'Entre espacios', grupo: 'Entre espacios' },
 };
 
 const $ = id => document.getElementById(id);
@@ -116,6 +117,14 @@ function rangoMes(d) {
 
 // Los pendientes (frases por revisar) no cuentan en totales ni gráficos hasta que se confirman.
 const listos = movs => movs.filter(x => x.estado !== 'pendiente');
+// Plata pasada entre Personal y los negocios (tipo 'traspaso'): no es gasto ni ingreso. En Personal cambia
+// lo libre (lo que sacas del negocio es plata tuya); en un negocio no cambia la ganancia.
+function entreEspacios(movs, esp = estado.espacio) {
+  const t = { entra: 0, sale: 0 };
+  for (const x of movs) if (x.tipo === 'traspaso') t[x.sentido === 'entra' ? 'entra' : 'sale'] += x.monto;
+  t.neto = esp ? 0 : t.entra - t.sale;
+  return t;
+}
 
 async function cargarConceptos() {
   estado.conceptos = (await DB.conceptos()).sort((a, b) => a.orden - b.orden);
@@ -138,6 +147,7 @@ async function pintarEspacios() {
   // Siempre visible: Personal, los negocios y "+ Negocio" (mientras haya menos de 3).
   document.body.classList.add('con-negocios');
   $('espacios').hidden = false;
+  $('anotar-traspaso').hidden = !estado.negocios.length;
   // Frases por revisar de los otros espacios, para que no se pierdan de vista.
   const pend = {};
   for (const x of await DB.todos()) if (x.estado === 'pendiente') pend[negocioDe(x)] = (pend[negocioDe(x)] || 0) + 1;
@@ -294,6 +304,15 @@ async function pintarMovimientos() {
       const f = new Date(d + 'T12:00:00');
       html += `<li class="dia">${DIAS[f.getDay()]} ${f.getDate()}</li>`;
     }
+    if (x.tipo === 'traspaso') {
+      const entra = x.sentido === 'entra', otro = Cuentas.nombreEspacio(x.otro || '');
+      html += `<li><button type="button" class="mov traspaso ${entra ? 'ingreso' : 'gasto'}" data-id="${x.id}">
+        <span class="mov-icono">⇄</span>
+        <span class="mov-texto"><strong>${entra ? `Recibiste de ${escapar(otro)}` : `Pasaste a ${escapar(otro)}`}</strong><small>Entre espacios${x.nota ? ' · ' + escapar(x.nota) : ''}</small></span>
+        <span class="mov-monto">${dinero((entra ? 1 : -1) * x.monto)}<small>${x.fecha.slice(11, 16)}</small></span>
+      </button></li>`;
+      continue;
+    }
     const c = concepto(x.concepto);
     const signo = x.tipo === 'ingreso' ? 1 : -1;
     html += `<li><button type="button" class="mov ${x.tipo}" data-id="${x.id}">
@@ -337,7 +356,7 @@ function presupuestoEn(c, mes) {
 // Agrupa el mes por tipo → categoría → concepto, con presupuesto y real.
 function agrupar(movs, mes) {
   const real = {};
-  for (const x of movs) real[x.concepto] = (real[x.concepto] || 0) + x.monto;
+  for (const x of movs) if (x.tipo !== 'traspaso') real[x.concepto] = (real[x.concepto] || 0) + x.monto;
   const ids = new Set([...conceptosDe().filter(c => presupuestoEn(c, mes) > 0).map(c => c.id), ...Object.keys(real)]);
   const tipos = { ingreso: new Map(), gasto: new Map(), inversion: new Map() };
   for (const id of ids) {
@@ -399,13 +418,15 @@ async function pintarResumen() {
   const ing = { real: suma(g.ingreso, 'real'), ppto: suma(g.ingreso, 'ppto') };
   const egr = { real: suma(g.gasto, 'real'), ppto: suma(g.gasto, 'ppto') };
   const inv = { real: suma(g.inversion, 'real'), ppto: suma(g.inversion, 'ppto') };
-  const libre = ing.real - egr.real - inv.real;
+  const entre = entreEspacios(movs);
+  const libre = ing.real - egr.real - inv.real + entre.neto;
   const pctInvertido = ing.real ? Math.round(inv.real / ing.real * 100) : 0;
 
   // 1. ¿A dónde se fue el ingreso? Gastos, inversión y lo que queda libre.
   const reparto = Graficos.dona([
     { nombre: nom.gastos, valor: egr.real, color: 'var(--c-gasto)' },
     { nombre: nom.inversiones, valor: inv.real, color: 'var(--c-inversion)' },
+    { nombre: 'A tus negocios', valor: estado.espacio ? 0 : entre.sale, color: 'var(--c-otros)' },
     { nombre: nom.libre, valor: Math.max(libre, 0), color: 'var(--c-libre)' },
   ].filter(p => p.valor > 0), { titulo: libre < 0 ? (estado.espacio ? 'Pérdida' : 'Te faltan') : nom.libre, valor: dinero(Math.abs(libre)) });
 
@@ -457,6 +478,7 @@ async function pintarResumen() {
       <div><span>${bicho(ANIMAL_TIPO.inversion)} ${nom.inversiones}</span><strong class="inversion">${dinero(inv.real)}</strong><small>Ppto ${dinero(inv.ppto)}</small></div>
       <div><span>${bicho(ANIMAL_TIPO.libre)} ${nom.libre}</span><strong class="${libre < 0 ? 'gasto' : ''}">${dinero(libre)}</strong><small>Ppto ${dinero(ing.ppto - egr.ppto - inv.ppto)}</small></div>
     </div>
+    ${entre.entra || entre.sale ? `<p class="nota centro">⇄ Entre espacios: ${[entre.entra && `recibiste ${dinero(entre.entra)}`, entre.sale && `pasaste ${dinero(entre.sale)}`].filter(Boolean).join(' y ')}. ${estado.espacio ? 'No cambia la ganancia.' : `Ya está sumado en ${nom.libre}.`}</p>` : ''}
     <section class="tarjeta"><h2>Historial de meses</h2><div id="historial"></div>
       <p class="nota">Toca un mes para verlo. En cada mes puedes tocar un concepto (abajo) para corregir su presupuesto.</p></section>
     ${estado.espacio
@@ -486,12 +508,15 @@ async function pintarHistorial() {
     const del = movs.filter(x => x.fecha.startsWith(clave));
     if (!del.length && k) continue;
     const t = tipo => del.filter(x => x.tipo === tipo).reduce((s, x) => s + x.monto, 0);
-    const libre = t('ingreso') - t('gasto') - t('inversion');
+    const entre = entreEspacios(del);
+    const cuenta = !estado.espacio;
+    const entro = t('ingreso') + (cuenta ? entre.entra : 0), salio = t('gasto') + t('inversion') + (cuenta ? entre.sale : 0);
+    const libre = entro - salio;
     const visto = clave === mesDe(estado.mes);
     filas.push(`<button type="button" class="hist-fila${visto ? ' visto' : ''}" data-mes="${clave}">
       <span>${MESES[f.getMonth()].replace(/^./, l => l.toUpperCase())} ${f.getFullYear() !== hoy.getFullYear() ? f.getFullYear() : ''}</span>
-      <span class="ingreso">+${dinero(t('ingreso'))}</span>
-      <span class="gasto">−${dinero(t('gasto') + t('inversion'))}</span>
+      <span class="ingreso">+${dinero(entro)}</span>
+      <span class="gasto">−${dinero(salio)}</span>
       <strong class="${libre < 0 ? 'critico' : ''}">${dinero(libre)}</strong></button>`);
   }
   $('historial').innerHTML = `<div class="hist-fila cabeza"><span>Mes</span><span>Entró</span><span>Salió</span><span>${nom.libre}</span></div>` + filas.join('');
@@ -535,7 +560,8 @@ async function pintarProyeccion() {
     : faltaInv > 0 ? `Te falta ${estado.espacio ? 'comprar' : 'apartar'} ${dinero(faltaInv)} para tu meta.` : '¡Meta cumplida!';
 
   // Al cierre: lo que esperas recibir menos lo que esperas gastar e invertir (o lo ya anotado, si es más).
-  const fin = Math.max(r.ingreso, p.ingreso) - Math.max(r.gasto, p.gasto) - Math.max(r.inversion, p.inversion);
+  const entre = entreEspacios(movs);
+  const fin = Math.max(r.ingreso, p.ingreso) - Math.max(r.gasto, p.gasto) - Math.max(r.inversion, p.inversion) + entre.neto;
   $('proyeccion').innerHTML = `
     <h1 class="titulo">${MESES[hoy.getMonth()].replace(/^./, l => l.toUpperCase())}${neg ? ` · ${escapar(neg.nombre)}` : ''}</h1>
     <p class="nota">Cómo vas este mes comparado con lo que esperas. Faltan ${quedan} días.</p>
@@ -553,9 +579,10 @@ async function pintarProyeccion() {
 
 async function pintarAjustes() {
   pintarProyeccion();
+  Cuentas.pintar();
   const mes = mesDe(new Date());
   const real = {};
-  for (const x of listos(await DB.entre(...rangoMes(new Date())))) real[x.concepto] = (real[x.concepto] || 0) + x.monto;
+  for (const x of listos(await DB.entre(...rangoMes(new Date())))) if (x.concepto) real[x.concepto] = (real[x.concepto] || 0) + x.monto;
   // Presupuestos por tipo, plegables: Gastos abierto, lo demás cerrado para no abrumar.
   const nom = nombres();
   const orden = [['gasto', nom.gastos], ['ingreso', nom.ingresos], ['inversion', nom.inversiones]];
@@ -636,6 +663,11 @@ async function borrarNegocio() {
     avisar(`«${n.nombre}» tiene ${usados} movimiento${usados > 1 ? 's' : ''}. Bórralos primero (abajo, "Empezar de cero" dentro del negocio).`);
     return;
   }
+  const deudas = (await DB.deudas()).filter(d => negocioDe(d) === n.id).length;
+  if (deudas) {
+    avisar(`«${n.nombre}» tiene ${deudas} deuda${deudas > 1 ? 's' : ''} anotada${deudas > 1 ? 's' : ''} en Proyección. Bórralas primero.`);
+    return;
+  }
   $('editor-negocio').close();
   const suyos = conceptosDe(n.id);
   for (const c of suyos) await DB.borrarConcepto(c.id);
@@ -672,8 +704,23 @@ function abrirConcepto(c, nuevo = {}, mes = mesDe(new Date())) {
   f.categoria.value = c ? c.categoria : (nuevo.nombre || nuevo.tipo) ? comun : '';
   f.presupuesto.value = c ? (presupuestoEn(c, mes) / 100).toFixed(2) : '';
   f.oculto.checked = c ? !!c.oculto : false;
+  f.meta.value = c && c.meta ? (c.meta / 100).toFixed(2) : '';
+  f.fijo.value = c && c.fijo ? c.fijo : '';
   $('concepto-borrar').hidden = !c;
   $('editor-concepto').showModal();
+  // Desde "+ Nueva meta" o "+ Fijo del mes": ejemplos a la vista y, en el fijo, el día de hoy.
+  if (nuevo.meta) f.nombre.placeholder = 'Por ejemplo Viaje a la playa';
+  else if (nuevo.fijo) f.nombre.placeholder = 'Por ejemplo Arriendo';
+  else f.nombre.placeholder = '';
+  if (nuevo.fijo) f.fijo.value = new Date().getDate();
+  verCamposConcepto();
+}
+
+// La meta de ahorro solo tiene sentido en inversión/ahorro; la nota del fijo, si hay día.
+function verCamposConcepto() {
+  const f = $('concepto-form');
+  $('campo-meta').hidden = f.tipo.value !== 'inversion';
+  $('fijo-nota').hidden = !f.fijo.value;
 }
 
 async function guardarConcepto() {
@@ -699,6 +746,23 @@ async function guardarConcepto() {
     if (hacia) for (const k of Object.keys(historial)) if (k > mes) delete historial[k];
     historial[mes] = ppto;
   }
+  const meta = f.tipo.value === 'inversion' && f.meta.value.trim() ? aCentavos(f.meta.value) : 0;
+  if (meta === null) {
+    f.meta.setCustomValidity('Escribe un monto, por ejemplo 500');
+    f.meta.reportValidity();
+    return false;
+  }
+  const dia = f.fijo.value ? Math.round(Number(f.fijo.value)) : 0;
+  if (dia && (dia < 1 || dia > 31)) {
+    f.fijo.setCustomValidity('Un día del 1 al 31');
+    f.fijo.reportValidity();
+    return false;
+  }
+  if (dia && !ppto) {
+    f.presupuesto.setCustomValidity('Un fijo necesita monto: escríbelo aquí');
+    f.presupuesto.reportValidity();
+    return false;
+  }
   const vigente = { historial, presupuesto: ppto };
   const c = {
     ...(previo || { id: nuevoId(), orden: estado.conceptos.length, usos: 0, negocio: estado.espacio }),
@@ -709,9 +773,13 @@ async function guardarConcepto() {
     presupuesto: presupuestoEn(vigente, actual),
     historial,
     oculto: f.oculto.checked,
+    meta,
+    fijo: dia,
   };
+  Cuentas.prepararFijo(c, previo);
   await DB.guardarConcepto(c);
   await cargarConceptos();
+  Cuentas.anotarFijos();
   return c;
 }
 
@@ -722,8 +790,14 @@ async function exportar() {
   const filas = [];
   const meses = new Set();
   for (const x of movs) {
-    const c = concepto(x.concepto);
     meses.add(x.fecha.slice(0, 7));
+    if (x.tipo === 'traspaso') {
+      const otro = Cuentas.nombreEspacio(x.otro || '');
+      filas.push([x.fecha.slice(0, 10), 'traspaso', 'Entre espacios', x.sentido === 'entra' ? `Recibido de ${otro}` : `Pasado a ${otro}`,
+        0, (x.sentido === 'entra' ? 1 : -1) * x.monto, x.nota || '', negocioDe(x)]);
+      continue;
+    }
+    const c = concepto(x.concepto);
     filas.push([x.fecha.slice(0, 10), c.tipo, c.categoria, c.nombre, 0, x.monto, x.nota || '', negocioDe(x)]);
   }
   // Como en el Excel: una fila de presupuesto por concepto el día 1 de cada mes, con monto 0.
@@ -929,7 +1003,8 @@ $('lista').addEventListener('click', e => {
   const b = e.target.closest('.mov');
   if (!b || b.dataset.arrastrado) return;
   const mov = $('lista').movs.find(x => x.id === b.dataset.id);
-  if (mov) abrirEditor(mov);
+  if (mov && mov.tipo === 'traspaso') Cuentas.abrirTraspaso(mov);
+  else if (mov) abrirEditor(mov);
 });
 
 $('editor-form').tipo.addEventListener('change', e => opcionesConcepto(e.target.value));
@@ -946,6 +1021,14 @@ $('editor-form').addEventListener('submit', async e => {
 });
 
 async function borrarMov(mov) {
+  if (mov.tipo === 'traspaso') {
+    const par = (await DB.todos()).find(x => x.id === mov.par);
+    await DB.borrar(mov.id);
+    if (par) await DB.borrar(par.id);
+    repintar();
+    avisar(`Borrado: ${dinero(mov.monto)} entre espacios`, async () => { await DB.guardar(mov); if (par) await DB.guardar(par); });
+    return;
+  }
   await DB.borrar(mov.id);
   repintar();
   avisar(`Borrado: ${mov.concepto ? concepto(mov.concepto).nombre : '«' + mov.frase + '»'} ${dinero(mov.monto)}`, () => DB.guardar(mov));
@@ -1020,7 +1103,8 @@ $('editor-nuevo').addEventListener('click', () => abrirConcepto(null, {
   nombre: Voz.nombreSugerido(estado.editando.frase),
   tipo: $('editor-form').tipo.value,
 }));
-$('concepto-form').presupuesto.addEventListener('input', e => e.target.setCustomValidity(''));
+$('concepto-form').addEventListener('input', e => { if (e.target.setCustomValidity) e.target.setCustomValidity(''); verCamposConcepto(); });
+$('concepto-form').tipo.addEventListener('change', verCamposConcepto);
 $('concepto-form').addEventListener('submit', async e => {
   if (e.submitter && e.submitter.value === 'guardar') {
     e.preventDefault();
@@ -1147,6 +1231,7 @@ const arranque = (async () => {
   pintarTipo();
   pintarMonto();
   pintarPendientes();
+  Cuentas.anotarFijos();
   // Acceso directo "Anotar por voz" del ícono: abre directo el micrófono.
   if (new URLSearchParams(location.search).has('voz')) {
     history.replaceState(null, '', location.pathname);

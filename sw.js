@@ -1,7 +1,7 @@
 // Guarda la app en el teléfono para que abra sin internet.
 // Sube VERSION cada vez que cambie algún archivo.
-const VERSION = 'finanzas-v24';
-const ARCHIVOS = ['./', 'index.html', 'styles.css', 'db.js', 'excel.js', 'graficos.js', 'app.js', 'voz.js',
+const VERSION = 'finanzas-v25';
+const ARCHIVOS = ['./', 'index.html', 'styles.css', 'db.js', 'excel.js', 'graficos.js', 'app.js', 'cuentas.js', 'voz.js',
   'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'mic-hormiga.svg',
   'personaje-hormiga.png', 'personaje-oso.png', 'personaje-leon.png'];
 
