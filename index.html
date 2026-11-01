@@ -22,6 +22,12 @@
         <strong>Hormiga<span class="dolar">$</span>to<span class="dolar">$</span></strong>
         <small>· Controla tus finanzas</small>
       </header>
+      <header class="mes mes-mini">
+        <button type="button" data-mes="-1" aria-label="Mes anterior">‹</button>
+        <h1 class="mes-nombre"></h1>
+        <button type="button" data-mes="1" aria-label="Mes siguiente">›</button>
+      </header>
+      <button type="button" id="volver-hoy" class="volver-hoy" hidden></button>
       <div class="tipo" role="radiogroup" aria-label="Tipo">
         <button type="button" class="tipo-btn activo" data-tipo="gasto" role="radio" aria-checked="true"><i class="bicho" aria-hidden="true">🐜</i>Gasto</button>
         <button type="button" class="tipo-btn" data-tipo="ingreso" role="radio" aria-checked="false"><i class="bicho" aria-hidden="true">🐝</i>Ingreso</button>
@@ -81,9 +87,14 @@
 
     <!-- Proyección del mes: presupuesto, cierre estimado, conceptos y exportar -->
     <section id="vista-ajustes" class="vista">
+      <header class="mes">
+        <button type="button" data-mes="-1" aria-label="Mes anterior">‹</button>
+        <h1 class="mes-nombre"></h1>
+        <button type="button" data-mes="1" aria-label="Mes siguiente">›</button>
+      </header>
       <div id="proyeccion"></div>
       <div id="herramientas"></div>
-      <h1 class="titulo">Presupuestos</h1>
+      <h1 class="titulo" id="ppto-titulo">Presupuestos</h1>
       <p class="nota">Cuánto esperas gastar, ganar o invertir cada mes. Toca uno para cambiarlo.</p>
       <div id="ajustes-lista"></div>
       <button type="button" id="nuevo-concepto" class="boton-ancho">+ Nuevo concepto</button>
