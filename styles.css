@@ -644,3 +644,11 @@ dialog .sentido label:has(input:checked) { border-color: var(--acento); backgrou
 dialog .abonar input { margin: 0; flex: 1; }
 .abonar button { white-space: nowrap; font: inherit; }
 .abonar button { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--acento); background: var(--acento); color: var(--sobre-acento); font-weight: 600; }
+
+/* Mes elegido también en Anotar y Proyección: se puede anotar en un mes pasado */
+.mes-mini { margin: -4px 0 6px; }
+.mes-mini h1 { font-size: 15px; color: var(--suave); font-weight: 600; }
+.mes-mini button { font-size: 22px; padding: 0 14px; }
+.mes button:disabled { opacity: .25; }
+.volver-hoy { display: block; width: 100%; margin: 0 0 8px; padding: 7px 10px; border: 0; border-radius: 10px; background: var(--acento); color: var(--sobre-acento); font-weight: 700; font-size: 13.5px; }
+body.mes-pasado .mes-mini h1 { color: var(--acento); }

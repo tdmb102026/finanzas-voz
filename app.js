@@ -115,6 +115,17 @@ function rangoMes(d) {
   return [fechaLocal(desde), fechaLocal(hasta)];
 }
 
+// Anotar en el mes elegido arriba: hoy si es el mes actual; si es un mes pasado, el mismo día de ese mes
+// (o su último día), a la hora de ahora.
+const esMesActual = (d = estado.mes) => mesDe(d) === mesDe(new Date());
+function fechaAnotar() {
+  const ahora = new Date(), m = estado.mes;
+  if (esMesActual() || m > ahora) return fechaLocal(ahora);
+  const ultimo = new Date(m.getFullYear(), m.getMonth() + 1, 0).getDate();
+  return fechaLocal(new Date(m.getFullYear(), m.getMonth(), Math.min(ahora.getDate(), ultimo), ahora.getHours(), ahora.getMinutes(), ahora.getSeconds()));
+}
+const nombreMes = d => `${MESES[d.getMonth()]}${d.getFullYear() !== new Date().getFullYear() ? ' ' + d.getFullYear() : ''}`;
+
 // Los pendientes (frases por revisar) no cuentan en totales ni gráficos hasta que se confirman.
 const listos = movs => movs.filter(x => x.estado !== 'pendiente');
 // Plata pasada entre Personal y los negocios (tipo 'traspaso'): no es gasto ni ingreso. En Personal cambia
@@ -224,7 +235,7 @@ async function anotar(conceptoId) {
     monto: centavos,
     moneda: 'USD',
     concepto: c.id,
-    fecha: fechaLocal(),
+    fecha: fechaAnotar(),
     nota: '',
     frase: '',
     negocio: estado.espacio,
@@ -237,7 +248,7 @@ async function anotar(conceptoId) {
   c.usos = (c.usos || 0) + 1;
   await DB.guardarConcepto(c);
   vibrar(30);
-  avisar(`Anotado: ${TIPOS[mov.tipo].texto} ${dinero(mov.monto)}, ${c.nombre.toLowerCase()}`, async () => {
+  avisar(`Anotado${esMesActual() ? '' : ' en ' + nombreMes(estado.mes)}: ${TIPOS[mov.tipo].texto} ${dinero(mov.monto)}, ${c.nombre.toLowerCase()}`, async () => {
     await DB.borrar(mov.id);
     c.usos = Math.max(0, c.usos - 1);
     await DB.guardarConcepto(c);
@@ -254,14 +265,13 @@ async function anotar(conceptoId) {
 
 let temporizador, accionDeshacer;
 
-function avisar(texto, deshacer) {
+function avisar(texto, deshacer, ms = SEGUNDOS_DESHACER * 1000) {
   clearTimeout(temporizador);
   accionDeshacer = deshacer;
   $('aviso-texto').textContent = texto;
   $('deshacer').hidden = !deshacer;
   $('aviso').hidden = false;
-  temporizador = setTimeout(() => { $('aviso').hidden = true; accionDeshacer = null; },
-    SEGUNDOS_DESHACER * 1000);
+  temporizador = setTimeout(() => { $('aviso').hidden = true; accionDeshacer = null; }, ms);
 }
 
 async function deshacer() {
@@ -278,6 +288,12 @@ function pintarMes() {
   const m = estado.mes;
   document.querySelectorAll('.mes-nombre').forEach(h =>
     h.textContent = `${MESES[m.getMonth()]} ${m.getFullYear()}`);
+  // En Anotar y Proyección no se pasa del mes actual.
+  const actual = esMesActual();
+  document.querySelectorAll('#vista-anotar [data-mes="1"], #vista-ajustes [data-mes="1"]').forEach(b => { b.disabled = actual; });
+  document.body.classList.toggle('mes-pasado', !actual);
+  $('volver-hoy').hidden = actual;
+  $('volver-hoy').textContent = `Anotando en ${nombreMes(m)} · Volver a hoy`;
 }
 
 async function pintarMovimientos() {
@@ -527,9 +543,11 @@ async function pintarHistorial() {
 // Proyección del mes actual, en palabras simples: un medidor por tipo ("llevas X de Y") y, al final,
 // cuánto te quedaría al cerrar el mes si se cumple lo que esperas.
 async function pintarProyeccion() {
-  const hoy = new Date();
+  // El mes elegido arriba: el actual (cómo vas) o uno pasado (cómo cerró).
+  const hoy = esMesActual() ? new Date() : estado.mes;
+  const actual = esMesActual();
   const totalDias = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate();
-  const quedan = Math.max(totalDias - hoy.getDate(), 0);
+  const quedan = actual ? Math.max(totalDias - hoy.getDate(), 0) : 0;
   const nom = nombres();
   const mes = mesDe(hoy);
   const ppto = tipo => conceptosDe().filter(c => c.tipo === tipo).reduce((s, c) => s + presupuestoEn(c, mes), 0);
@@ -549,40 +567,60 @@ async function pintarProyeccion() {
     </section>`;
 
   const resta = p.gasto - r.gasto;
-  const fraseGasto = !p.gasto ? 'Ponle presupuesto a tus gastos (abajo) para saber cuánto puedes gastar.'
-    : resta < 0 ? `<b class="critico">Te pasaste ${dinero(-resta)}.</b> Trata de no gastar más este mes.`
-    : `Te quedan <b>${dinero(resta)}</b> para gastar${quedan ? `: unos <b>${dinero(Math.floor(resta / Math.max(quedan, 1)))} por día</b>` : ''}.`;
   const faltaIng = p.ingreso - r.ingreso;
-  const fraseIng = !p.ingreso ? `Anota tus ${nom.ingresos.toLowerCase()} para verlos aquí.`
-    : faltaIng > 0 ? `Te falta recibir ${dinero(faltaIng)} de lo que esperas.` : '¡Ya recibiste todo lo que esperabas!';
   const faltaInv = p.inversion - r.inversion;
-  const fraseInv = !p.inversion ? 'Sin meta este mes.'
-    : faltaInv > 0 ? `Te falta ${estado.espacio ? 'comprar' : 'apartar'} ${dinero(faltaInv)} para tu meta.` : '¡Meta cumplida!';
-
-  // Al cierre: lo que esperas recibir menos lo que esperas gastar e invertir (o lo ya anotado, si es más).
   const entre = entreEspacios(movs);
-  const fin = Math.max(r.ingreso, p.ingreso) - Math.max(r.gasto, p.gasto) - Math.max(r.inversion, p.inversion) + entre.neto;
-  $('proyeccion').innerHTML = `
-    <h1 class="titulo">${MESES[hoy.getMonth()].replace(/^./, l => l.toUpperCase())}${neg ? ` · ${escapar(neg.nombre)}` : ''}</h1>
-    <p class="nota">Cómo vas este mes comparado con lo que esperas. Faltan ${quedan} días.</p>
-    ${medidor('gasto', nom.gastos, fraseGasto)}
-    ${medidor('ingreso', nom.ingresos, fraseIng)}
-    ${medidor('inversion', nom.inversiones, fraseInv)}
-    <section class="tarjeta cierre ${fin < 0 ? 'mal' : 'bien'}">
+  let fraseGasto, fraseIng, fraseInv, cierre;
+  if (actual) {
+    fraseGasto = !p.gasto ? 'Ponle presupuesto a tus gastos (abajo) para saber cuánto puedes gastar.'
+      : resta < 0 ? `<b class="critico">Te pasaste ${dinero(-resta)}.</b> Trata de no gastar más este mes.`
+      : `Te quedan <b>${dinero(resta)}</b> para gastar${quedan ? `: unos <b>${dinero(Math.floor(resta / Math.max(quedan, 1)))} por día</b>` : ''}.`;
+    fraseIng = !p.ingreso ? `Anota tus ${nom.ingresos.toLowerCase()} para verlos aquí.`
+      : faltaIng > 0 ? `Te falta recibir ${dinero(faltaIng)} de lo que esperas.` : '¡Ya recibiste todo lo que esperabas!';
+    fraseInv = !p.inversion ? 'Sin meta este mes.'
+      : faltaInv > 0 ? `Te falta ${estado.espacio ? 'comprar' : 'apartar'} ${dinero(faltaInv)} para tu meta.` : '¡Meta cumplida!';
+    // Al cierre: lo que esperas recibir menos lo que esperas gastar e invertir (o lo ya anotado, si es más).
+    const fin = Math.max(r.ingreso, p.ingreso) - Math.max(r.gasto, p.gasto) - Math.max(r.inversion, p.inversion) + entre.neto;
+    cierre = `<section class="tarjeta cierre ${fin < 0 ? 'mal' : 'bien'}">
       <span>Al terminar el mes te quedarían</span>
       <strong>${dinero(fin)}</strong>
       <small>${fin < 0
         ? `Lo que piensas gastar e ${estado.espacio ? 'comprar' : 'invertir'} es más de lo que esperas ${estado.espacio ? 'vender' : 'recibir'}. Baja algún presupuesto abajo.`
         : `Si cumples tus presupuestos, ese dinero te sobra.`}</small>
     </section>`;
+  } else {
+    // Mes pasado: cómo cerró, con lo que de verdad se anotó.
+    fraseGasto = !p.gasto ? 'Ese mes no tenía presupuesto de gastos.'
+      : resta < 0 ? `<b class="critico">Te pasaste ${dinero(-resta)}</b> del presupuesto.` : `Te sobraron <b>${dinero(resta)}</b> del presupuesto.`;
+    fraseIng = !p.ingreso ? 'Ese mes no tenía nada esperado.'
+      : faltaIng > 0 ? `Faltó recibir ${dinero(faltaIng)} de lo esperado.` : 'Recibiste todo lo esperado.';
+    fraseInv = !p.inversion ? 'Sin meta ese mes.' : faltaInv > 0 ? `Faltó ${dinero(faltaInv)} para la meta.` : '¡Meta cumplida!';
+    const fin = r.ingreso - r.gasto - r.inversion + entre.neto;
+    cierre = `<section class="tarjeta cierre ${fin < 0 ? 'mal' : 'bien'}">
+      <span>Así terminó ${MESES[hoy.getMonth()]}</span>
+      <strong>${dinero(fin)}</strong>
+      <small>${fin < 0 ? `Saliste más de lo que ${estado.espacio ? 'vendiste' : 'entró'}.` : `Eso te ${estado.espacio ? 'quedó de ganancia' : 'sobró'}.`} Puedes anotar lo que faltó desde Anotar con este mes elegido.</small>
+    </section>`;
+  }
+  $('proyeccion').innerHTML = `
+    <p class="nota">${neg ? `${escapar(neg.nombre)}. ` : ''}${actual ? `Cómo vas este mes comparado con lo que esperas. Faltan ${quedan} días.` : 'Cómo cerró ese mes comparado con lo que esperabas.'}</p>
+    ${medidor('gasto', nom.gastos, fraseGasto)}
+    ${medidor('ingreso', nom.ingresos, fraseIng)}
+    ${medidor('inversion', nom.inversiones, fraseInv)}
+    ${cierre}`;
 }
 
 async function pintarAjustes() {
   pintarProyeccion();
-  Cuentas.pintar();
-  const mes = mesDe(new Date());
+  // Metas, deudas y fijos son de hoy: solo se ven en el mes actual.
+  const actual = esMesActual();
+  $('herramientas').hidden = !actual;
+  if (actual) Cuentas.pintar();
+  const base = actual ? new Date() : estado.mes;
+  const mes = mesDe(base);
+  $('ppto-titulo').textContent = actual ? 'Presupuestos' : `Presupuestos de ${nombreMes(base)}`;
   const real = {};
-  for (const x of listos(await DB.entre(...rangoMes(new Date())))) if (x.concepto) real[x.concepto] = (real[x.concepto] || 0) + x.monto;
+  for (const x of listos(await DB.entre(...rangoMes(base)))) if (x.concepto) real[x.concepto] = (real[x.concepto] || 0) + x.monto;
   // Presupuestos por tipo, plegables: Gastos abierto, lo demás cerrado para no abrumar.
   const nom = nombres();
   const orden = [['gasto', nom.gastos], ['ingreso', nom.ingresos], ['inversion', nom.inversiones]];
@@ -912,6 +950,7 @@ async function pintarPendientes() {
 // ---------- Navegación ----------
 
 function repintar() {
+  pintarMes();
   if (estado.vista === 'anotar') pintarTipo();
   if (estado.vista === 'movimientos') pintarMovimientos();
   if (estado.vista === 'resumen') pintarResumen();
@@ -922,6 +961,8 @@ function repintar() {
 
 function mostrar(vista) {
   estado.vista = vista;
+  // Anotar y Proyección no van a meses futuros: si venías de uno, vuelve al actual.
+  if ((vista === 'anotar' || vista === 'ajustes') && estado.mes > new Date()) estado.mes = new Date();
   document.querySelectorAll('.vista').forEach(v => v.classList.toggle('activa', v.id === 'vista-' + vista));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('activo', b.dataset.vista === vista));
   repintar();
@@ -985,7 +1026,7 @@ $('resumen').addEventListener('click', e => {
   const h = e.target.closest('.hist-fila[data-mes]');
   if (h) {
     const [a, m] = h.dataset.mes.split('-').map(Number);
-    estado.mes = new Date(a, m - 1, 1);
+    estado.mes = h.dataset.mes === mesDe(new Date()) ? new Date() : new Date(a, m - 1, 1);
     repintar();
     $('vista-resumen').scrollTo({ top: 0, behavior: 'smooth' });
     return;
@@ -995,9 +1036,12 @@ $('resumen').addEventListener('click', e => {
 });
 
 document.querySelectorAll('[data-mes]').forEach(b => b.addEventListener('click', () => {
-  estado.mes = new Date(estado.mes.getFullYear(), estado.mes.getMonth() + Number(b.dataset.mes), 1);
+  const nuevo = new Date(estado.mes.getFullYear(), estado.mes.getMonth() + Number(b.dataset.mes), 1);
+  // El mes actual se guarda con la fecha de hoy (así "volver a hoy" anota hoy).
+  estado.mes = mesDe(nuevo) === mesDe(new Date()) ? new Date() : nuevo;
   repintar();
 }));
+$('volver-hoy').addEventListener('click', () => { estado.mes = new Date(); repintar(); });
 
 $('lista').addEventListener('click', e => {
   const b = e.target.closest('.mov');
@@ -1081,7 +1125,7 @@ $('lista').addEventListener('pointercancel', soltar);
 
 $('ajustes-lista').addEventListener('click', e => {
   const b = e.target.closest('[data-concepto]');
-  if (b) abrirConcepto(concepto(b.dataset.concepto));
+  if (b) abrirConcepto(concepto(b.dataset.concepto), {}, mesDe(estado.mes));
 });
 $('nuevo-concepto').addEventListener('click', () => abrirConcepto(null));
 
@@ -1138,7 +1182,7 @@ function cambiarEspacio(paso) {
   pintarEspacios();
   repintar();
   const n = negocioPorId(ids[i]);
-  avisar(n ? `${n.nombre}` : 'Personal');
+  avisar(n ? `${n.nombre}` : 'Personal', null, 500);
   const v = document.querySelector('.vista.activa');
   if (v) { v.classList.remove('entra-izq', 'entra-der'); void v.offsetWidth; v.classList.add(paso > 0 ? 'entra-izq' : 'entra-der'); }
   vibrar(15);
@@ -1228,6 +1272,7 @@ document.addEventListener('keydown', e => {
 // Arranque: Voz.oido espera a que estén cargados los conceptos.
 const arranque = (async () => {
   await cargarConceptos();
+  pintarMes();
   pintarTipo();
   pintarMonto();
   pintarPendientes();

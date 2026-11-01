@@ -251,7 +251,7 @@ const Cuentas = (() => {
       f.de.value = estado.espacio;
       f.a.value = ids.find(id => id !== estado.espacio);
       f.monto.value = aCentavos(estado.entrada) ? (aCentavos(estado.entrada) / 100).toFixed(2) : '';
-      f.fecha.value = fechaLocal().slice(0, 16);
+      f.fecha.value = fechaAnotar().slice(0, 16);
       f.nota.value = '';
     }
     $('traspaso-titulo').textContent = mov ? 'Plata entre espacios' : 'Pasar plata';

@@ -195,7 +195,7 @@ const Voz = (() => {
       monto: montoRapido(frase),
       moneda: 'USD',
       concepto: '',
-      fecha: fechaLocal(),
+      fecha: fechaAnotar(),  // en Anotar puede estar elegido un mes pasado
       nota: '',
       frase,
       estado: 'pendiente',
