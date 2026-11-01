@@ -33,6 +33,18 @@
             android:launchMode="singleTask"
             android:noHistory="false" />
 
+        <!-- Al poner un widget: elegir si es de Personal o de un negocio. -->
+        <activity
+            android:name=".WidgetElegir"
+            android:exported="true"
+            android:label="@string/widget_elegir"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.DeviceDefault.Dialog">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
         <!-- Botón del panel de arriba: funciona desde la pantalla bloqueada (pide la huella). -->
         <service
             android:name=".TileVoz"
@@ -51,6 +63,7 @@
             android:label="@string/widget_nombre">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="io.github.tdmb102026.finanzas.WIDGET_FIJADO" />
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_voz" />
         </receiver>

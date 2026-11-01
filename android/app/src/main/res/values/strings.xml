@@ -4,4 +4,5 @@
     <string name="widget_nombre">Anotar por voz</string>
     <string name="atajo_voz">Anotar por voz</string>
     <string name="atajo_voz_corto">Por voz</string>
+    <string name="widget_elegir">Widget de MIG</string>
 </resources>

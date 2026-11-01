@@ -500,3 +500,45 @@ dialog textarea { resize: none; user-select: text; }
 .tipo-btn .bicho { width: auto; height: auto; background: none; margin-right: 4px; font-size: 12px; vertical-align: 1px; }
 .nav-btn .bicho { display: block; margin: 0 auto 2px; background: none; width: auto; height: 14px; font-size: 12px; opacity: 0.7; }
 .seccion .bicho { margin-right: 6px; vertical-align: -3px; text-transform: none; }
+
+/* ---------- Personal y negocios ---------- */
+.espacios {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  max-width: 480px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 8px 16px 0;
+  scrollbar-width: none;
+}
+.espacios[hidden] { display: none; }
+.espacio {
+  position: relative;
+  flex: none;
+  border: 1px solid var(--borde);
+  background: var(--superficie);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--suave);
+  white-space: nowrap;
+}
+.espacio span { margin-right: 5px; }
+.espacio.activo { background: var(--acento); border-color: var(--acento); color: var(--sobre-acento); }
+.espacio[data-cuenta]::after {
+  content: attr(data-cuenta);
+  position: absolute;
+  top: -5px;
+  right: -4px;
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--critico);
+  color: #fff;
+  font-size: 10px;
+  line-height: 16px;
+}
+/* Con negocios, la fila de arriba ya dice dónde estás: la marca se quita para no robar espacio a Anotar. */
+body.con-negocios .marca-app { display: none; }

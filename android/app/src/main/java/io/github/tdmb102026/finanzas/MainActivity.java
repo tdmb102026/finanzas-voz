@@ -1,7 +1,9 @@
 package io.github.tdmb102026.finanzas;
 
 import android.app.Activity;
+import android.app.PendingIntent;
 import android.app.StatusBarManager;
+import android.appwidget.AppWidgetManager;
 import android.content.ComponentName;
 import android.content.ActivityNotFoundException;
 import android.content.ContentValues;
@@ -156,6 +158,30 @@ public class MainActivity extends Activity {
             } catch (Exception e) {
                 aviso("No se pudo guardar el archivo");
             }
+        }
+
+        // La página manda sus negocios [{id, nombre, icono}]: los widgets muestran el nombre y saben a cuál anotan.
+        @JavascriptInterface
+        public void negocios(String json) {
+            WidgetVoz.prefs(MainActivity.this).edit().putString("negocios", json).apply();
+            WidgetVoz.dibujarTodos(MainActivity.this);
+        }
+
+        // "Poner widget en la pantalla" del negocio que se está viendo ("" = Personal).
+        @JavascriptInterface
+        public void ponerWidget(String negocio) {
+            AppWidgetManager m = AppWidgetManager.getInstance(MainActivity.this);
+            if (!m.isRequestPinAppWidgetSupported()) {
+                aviso("Tu pantalla de inicio no deja ponerlo desde aquí: mantén presionado el inicio → Widgets → MIG.");
+                return;
+            }
+            Intent listo = new Intent(MainActivity.this, WidgetVoz.class)
+                    .setAction(WidgetVoz.FIJADO)
+                    .putExtra(WidgetVoz.NEGOCIO, negocio == null ? "" : negocio);
+            // Mutable: Android le agrega el número del widget nuevo.
+            PendingIntent pi = PendingIntent.getBroadcast(MainActivity.this, 2, listo,
+                    PendingIntent.FLAG_MUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+            m.requestPinAppWidget(new ComponentName(MainActivity.this, WidgetVoz.class), null, pi);
         }
 
         private void aviso(String texto) {

@@ -12,6 +12,8 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <!-- Personal y cada negocio: lo que se anota y se ve depende de cuál está elegido -->
+  <nav id="espacios" class="espacios" aria-label="Personal o negocio" hidden></nav>
   <main>
     <!-- Anotar: la pantalla de los 3 segundos -->
     <section id="vista-anotar" class="vista activa">
@@ -77,6 +79,12 @@
       <p class="nota">El presupuesto es mensual y se repite cada mes. Toca un concepto para cambiarlo.</p>
       <div id="ajustes-lista"></div>
       <button type="button" id="nuevo-concepto" class="boton-ancho">+ Nuevo concepto</button>
+      <h1 class="titulo">Mis negocios</h1>
+      <p class="nota">Cada negocio (hasta 3) tiene su propio panel, conceptos, presupuesto y widget, aparte de tus finanzas personales. Cambias entre ellos arriba.</p>
+      <ul id="negocios-lista" class="lista"></ul>
+      <button type="button" id="nuevo-negocio" class="boton-ancho">+ Agregar negocio</button>
+      <button type="button" id="poner-widget" class="boton-ancho" hidden></button>
+      <p id="widget-nota" class="nota"></p>
       <h1 class="titulo">Anotar por voz</h1>
       <p class="nota">Dices "gasté 30 en el súper" y la IA lo ordena. Se configura una vez por teléfono, con el enlace y la contraseña de tu Apps Script (la clave de Anthropic se queda allá, nunca aquí).</p>
       <form id="voz-form" class="campos">
@@ -185,6 +193,24 @@
       <label class="check"><input type="checkbox" name="oculto"> Ocultar en Anotar</label>
       <div class="editor-botones">
         <button type="button" id="concepto-borrar" class="peligro">Borrar</button>
+        <button value="cancelar" formnovalidate>Cancelar</button>
+        <button value="guardar" class="principal">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="editor-negocio">
+    <form method="dialog" id="negocio-form">
+      <h2 id="negocio-titulo">Nuevo negocio</h2>
+      <p class="nota">Por ejemplo "Carros RC". Trae listos los conceptos Ventas, Mercadería, Envíos, Pasajes, Publicidad y Otros gastos; puedes cambiarlos después.</p>
+      <label>Nombre
+        <input name="nombre" autocomplete="off" maxlength="30" required>
+      </label>
+      <label>Icono (un emoji)
+        <input name="icono" autocomplete="off" placeholder="🏪">
+      </label>
+      <div class="editor-botones">
+        <button type="button" id="negocio-borrar" class="peligro">Borrar</button>
         <button value="cancelar" formnovalidate>Cancelar</button>
         <button value="guardar" class="principal">Guardar</button>
       </div>

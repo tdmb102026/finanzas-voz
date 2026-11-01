@@ -115,12 +115,14 @@ const Voz = (() => {
   }
 
   // Si ya corregiste una frase igual (cambia solo el monto), se anota sin preguntarle a la IA.
-  function yaAprendida(frase) {
+  // Solo cuentan los ejemplos de conceptos del mismo espacio (Personal o ese negocio).
+  function yaAprendida(frase, esp) {
     const k = clave(frase);
     const numeros = frase.match(/\d+(?:[.,]\d{1,2})?/g) || [];
     if (!k || numeros.length !== 1) return null;
-    const ej = ejemplos().reverse().find(x => clave(x.frase) === k);
-    return ej && estado.conceptos.find(c => c.id === ej.concepto) || null;
+    const suyos = conceptosDe(esp);
+    const ej = ejemplos().reverse().find(x => clave(x.frase) === k && suyos.some(c => c.id === x.concepto));
+    return ej && suyos.find(c => c.id === ej.concepto) || null;
   }
 
   // ---------- Escuchar ----------
@@ -182,10 +184,12 @@ const Voz = (() => {
     return (m && aCentavos(m[0])) || 0;
   }
 
-  async function enviar(frase) {
+  // negocio: '' = personal, o el id del negocio (el widget de un negocio lo manda).
+  async function enviar(frase, negocio = estado.espacio) {
     parar();
     $('escucha').close();
     const mov = {
+      negocio,
       id: nuevoId(),
       tipo: 'gasto',
       monto: montoRapido(frase),
@@ -218,7 +222,8 @@ const Voz = (() => {
     if (!listos.length) return `Para revisar en Movimientos: «${frase}»`;
     const m = listos[0], c = concepto(m.concepto);
     const resto = r.movs.length - 1;
-    return `Anotado: ${TIPOS[m.tipo].texto} ${dinero(m.monto)}, ${c.nombre.toLowerCase()}`
+    const n = negocioPorId(negocioDe(m));
+    return `Anotado${n ? ' en ' + n.nombre : ''}: ${nombres(negocioDe(m))[m.tipo].toLowerCase()} ${dinero(m.monto)}, ${c.nombre.toLowerCase()}`
       + (resto ? ` y ${resto} más` : '')
       + (listos.length < r.movs.length ? ' (revisa los pendientes)' : '');
   }
@@ -237,7 +242,11 @@ const Voz = (() => {
   // Manda la frase a la IA y guarda lo que entendió. Devuelve { movs, error }.
   async function clasificar(mov) {
     const hoy = new Date(mov.fecha);
-    const c = mov.monto > 0 && yaAprendida(mov.frase);
+    // Un negocio borrado: lo que quedó pendiente pasa a personal.
+    const esp = negocioPorId(negocioDe(mov)) ? negocioDe(mov) : '';
+    if (esp !== negocioDe(mov)) mov = { ...mov, negocio: esp };
+    const suyos = conceptosDe(esp);
+    const c = mov.monto > 0 && yaAprendida(mov.frase, esp);
     if (c) {
       const m = { ...mov, tipo: c.tipo, concepto: c.id, estado: 'listo', ia: 'ok' };
       await DB.guardar(m);
@@ -249,8 +258,10 @@ const Voz = (() => {
       tipo: 'frase',
       frase: mov.frase,
       hoy: `${DIAS[hoy.getDay()]} ${mov.fecha.slice(0, 10)}`,
-      conceptos: estado.conceptos.map(c => ({ id: c.id, nombre: c.nombre, tipo: c.tipo, categoria: c.categoria })),
-      ejemplos: ejemplos().filter(x => estado.conceptos.some(c => c.id === x.concepto)),
+      conceptos: suyos.map(c => ({ id: c.id, nombre: c.nombre, tipo: c.tipo, categoria: c.categoria })),
+      ejemplos: ejemplos().filter(x => suyos.some(c => c.id === x.concepto)),
+      // Nombre del negocio, para que la IA sepa que no son gastos personales (vacío = personal).
+      negocio: esp ? negocioPorId(esp).nombre : '',
     });
     if (!j.ok) {
       const m = { ...mov, ia: j.error === 'sin-red' ? 'falta' : 'error' };
@@ -264,7 +275,7 @@ const Voz = (() => {
     }
     const movs = [];
     for (const [i, x] of j.movimientos.entries()) {
-      const c = estado.conceptos.find(k => k.id === x.concepto);
+      const c = suyos.find(k => k.id === x.concepto);
       const monto = Math.round(Number(x.monto) * 100) || 0;
       const fecha = new Date(hoy);
       fecha.setDate(fecha.getDate() - Math.min(Math.max(Number(x.dias_atras) || 0, 0), 60));
@@ -332,9 +343,11 @@ const Voz = (() => {
 
   // Respuestas de la app Android: lo que se dijo, o que el teléfono no tiene reconocimiento de voz.
   // El widget usa una pantalla invisible: al terminar, se le pasa el aviso para que lo muestre y se cierre.
-  async function oido(texto) {
+  // El widget de un negocio manda su id; el de Personal manda ''. Sin segundo dato, va al espacio abierto.
+  async function oido(texto, negocio) {
     await arranque;
-    const aviso = texto && texto.trim() ? await enviar(texto.trim()) : 'No se escuchó nada.';
+    const esp = typeof negocio === 'string' && (negocio === '' || negocioPorId(negocio)) ? negocio : estado.espacio;
+    const aviso = texto && texto.trim() ? await enviar(texto.trim(), esp) : 'No se escuchó nada.';
     if (nativo && nativo.resultado) nativo.resultado(aviso);
   }
   function sinVozNativa() { abrirDialogo(); }

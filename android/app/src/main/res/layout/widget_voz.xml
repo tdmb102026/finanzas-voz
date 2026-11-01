@@ -1,16 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- La hormiga llena el espacio del widget (sin deformarse), así crece al estirarlo. -->
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- La hormiga llena el espacio del widget (sin deformarse), así crece al estirarlo.
+     Debajo, el nombre del negocio si el widget es de un negocio (en Personal no se ve). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:orientation="vertical"
     android:padding="4dp">
     <ImageView
         android:id="@+id/mic"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
         android:layout_gravity="center"
         android:scaleType="fitCenter"
         android:adjustViewBounds="true"
         android:src="@drawable/widget_hormiga"
         android:contentDescription="@string/widget_nombre" />
-</FrameLayout>
+    <TextView
+        android:id="@+id/nombre"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="2dp"
+        android:paddingStart="10dp"
+        android:paddingEnd="10dp"
+        android:paddingTop="2dp"
+        android:paddingBottom="3dp"
+        android:background="@drawable/widget_etiqueta"
+        android:textColor="#FFFFFF"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:visibility="gone" />
+</LinearLayout>

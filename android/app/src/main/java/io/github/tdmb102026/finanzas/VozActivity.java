@@ -27,6 +27,8 @@ public class VozActivity extends Activity {
     private boolean cargada = false;
     private String frase = null;
     private boolean terminado = false;
+    // "" = personal; el widget de un negocio manda su id.
+    private String negocio = "";
     private final Handler reloj = new Handler(Looper.getMainLooper());
 
     @Override
@@ -50,10 +52,14 @@ public class VozActivity extends Activity {
         setContentView(web);
         web.loadUrl(MainActivity.URL);
 
+        String n = getIntent().getStringExtra(WidgetVoz.NEGOCIO);
+        if (n != null) negocio = n;
+        String nombre = WidgetVoz.nombre(this, negocio);
         Intent i = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
         i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "es-EC");
-        i.putExtra(RecognizerIntent.EXTRA_PROMPT, "¿Qué gastaste o cobraste?");
+        i.putExtra(RecognizerIntent.EXTRA_PROMPT, nombre == null ? "¿Qué gastaste o cobraste?"
+                : nombre + ": ¿qué vendiste, compraste o gastaste?");
         try {
             startActivityForResult(i, PEDIR_VOZ);
         } catch (ActivityNotFoundException e) {
@@ -83,7 +89,7 @@ public class VozActivity extends Activity {
 
     private void anotarSiListo() {
         if (!cargada || frase == null || terminado) return;
-        web.evaluateJavascript("Voz.oido(" + JSONObject.quote(frase) + ")", null);
+        web.evaluateJavascript("Voz.oido(" + JSONObject.quote(frase) + ", " + JSONObject.quote(negocio) + ")", null);
         frase = null;
     }
 
