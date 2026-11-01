@@ -542,3 +542,14 @@ dialog textarea { resize: none; user-select: text; }
 }
 /* Con negocios, la fila de arriba ya dice dónde estás: la marca se quita para no robar espacio a Anotar. */
 body.con-negocios .marca-app { display: none; }
+
+/* Personaje de cada negocio */
+.espacio img { width: 22px; height: 22px; margin: -4px 5px -6px -6px; vertical-align: middle; }
+.personaje-lista { width: 34px; height: 34px; }
+.personajes { border: 0; padding: 0; margin: 0 0 6px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.personajes legend { font-size: 13px; color: var(--suave); margin-bottom: 6px; padding: 0; }
+dialog .personajes label { margin: 0; text-align: center; border: 2px solid var(--borde); border-radius: 12px; padding: 6px 2px; cursor: pointer; color: var(--texto); }
+.personajes input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.personajes img { display: block; width: 64px; height: 64px; margin: 0 auto 4px; }
+.personajes span { font-size: 12px; font-weight: 600; }
+dialog .personajes label:has(input:checked) { border-color: var(--acento); background: var(--tecla); }

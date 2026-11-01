@@ -7,16 +7,22 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Path;
+import android.graphics.Typeface;
 import android.net.Uri;
-import android.view.View;
 import android.widget.RemoteViews;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 // Widget del panel: un botón de micrófono que escucha y anota sin abrir la app.
-// Cada widget es de Personal o de un negocio (se elige al ponerlo); el del negocio muestra su nombre
-// y lo que se dice ahí se anota en ese negocio.
+// Cada widget es de Personal o de un negocio (se elige al ponerlo). El del negocio muestra su personaje
+// (hormiga, oso hormiguero o león) con el nombre en una cinta dorada, y lo que se dice ahí se anota en ese negocio.
 public class WidgetVoz extends AppWidgetProvider {
     static final String FIJADO = "io.github.tdmb102026.finanzas.WIDGET_FIJADO";
     static final String NEGOCIO = "negocio";
@@ -35,20 +41,67 @@ public class WidgetVoz extends AppWidgetProvider {
         dibujar(ctx, AppWidgetManager.getInstance(ctx), id);
     }
 
-    // Lista de negocios que guarda la página: [{id, nombre, icono}].
+    // Lista de negocios que guarda la página: [{id, nombre, personaje}].
     static JSONArray negocios(Context ctx) {
         try { return new JSONArray(prefs(ctx).getString("negocios", "[]")); } catch (Exception e) { return new JSONArray(); }
     }
 
-    // "🚗 Carros RC", o null si es personal o el negocio ya no existe.
-    static String nombre(Context ctx, String negocio) {
+    static JSONObject buscar(Context ctx, String negocio) {
         if (negocio == null || negocio.isEmpty()) return null;
         JSONArray l = negocios(ctx);
         for (int i = 0; i < l.length(); i++) {
             JSONObject n = l.optJSONObject(i);
-            if (n != null && negocio.equals(n.optString("id"))) return (n.optString("icono") + " " + n.optString("nombre")).trim();
+            if (n != null && negocio.equals(n.optString("id"))) return n;
         }
         return null;
+    }
+
+    // "Carros RC", o null si es personal o el negocio ya no existe.
+    static String nombre(Context ctx, String negocio) {
+        JSONObject n = buscar(ctx, negocio);
+        return n == null ? null : n.optString("nombre");
+    }
+
+    static int imagenPersonaje(String personaje) {
+        if ("oso".equals(personaje)) return R.drawable.negocio_oso;
+        if ("leon".equals(personaje)) return R.drawable.negocio_leon;
+        return R.drawable.negocio_hormiga;
+    }
+
+    // El personaje del negocio con su nombre en una cinta dorada abajo (medidas sobre 512 px).
+    static Bitmap dibujo(Context ctx, String personaje, String nombre) {
+        BitmapFactory.Options o = new BitmapFactory.Options();
+        o.inScaled = false;
+        Bitmap base = BitmapFactory.decodeResource(ctx.getResources(), imagenPersonaje(personaje), o);
+        Bitmap b = Bitmap.createBitmap(512, 512, Bitmap.Config.ARGB_8888);
+        Canvas c = new Canvas(b);
+        c.drawBitmap(Bitmap.createScaledBitmap(base, 512, 512, true), 0, 0, new Paint(Paint.FILTER_BITMAP_FLAG));
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        p.setColor(Color.parseColor("#B8860B"));
+        Path cola = new Path();
+        cola.moveTo(40, 400); cola.lineTo(80, 384); cola.lineTo(80, 470); cola.lineTo(40, 486); cola.close();
+        cola.moveTo(472, 400); cola.lineTo(432, 384); cola.lineTo(432, 470); cola.lineTo(472, 486); cola.close();
+        c.drawPath(cola, p);
+        Path cinta = new Path();
+        cinta.moveTo(70, 376); cinta.quadTo(256, 410, 442, 376); cinta.lineTo(442, 456);
+        cinta.quadTo(256, 490, 70, 456); cinta.close();
+        p.setColor(Color.parseColor("#FFD166"));
+        c.drawPath(cinta, p);
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeWidth(7);
+        p.setColor(Color.parseColor("#5A3A12"));
+        c.drawPath(cinta, p);
+        Paint t = new Paint(Paint.ANTI_ALIAS_FLAG);
+        t.setColor(Color.parseColor("#3E2414"));
+        t.setTypeface(Typeface.create("sans-serif-black", Typeface.BOLD));
+        t.setTextAlign(Paint.Align.CENTER);
+        // La letra se achica hasta que el nombre entre en la cinta.
+        float tam = 60;
+        t.setTextSize(tam);
+        while (tam > 18 && t.measureText(nombre) > 340) { tam -= 2; t.setTextSize(tam); }
+        Paint.FontMetrics fm = t.getFontMetrics();
+        c.drawText(nombre, 256, 432 - (fm.ascent + fm.descent) / 2, t);
+        return b;
     }
 
     static void dibujar(Context ctx, AppWidgetManager manager, int id) {
@@ -64,9 +117,11 @@ public class WidgetVoz extends AppWidgetProvider {
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         RemoteViews vista = new RemoteViews(ctx.getPackageName(), R.layout.widget_voz);
         vista.setOnClickPendingIntent(R.id.mic, pi);
-        vista.setOnClickPendingIntent(R.id.nombre, pi);
-        vista.setTextViewText(R.id.nombre, nombre == null ? "" : nombre);
-        vista.setViewVisibility(R.id.nombre, nombre == null ? View.GONE : View.VISIBLE);
+        if (nombre == null) {
+            vista.setImageViewResource(R.id.mic, R.drawable.widget_hormiga);
+        } else {
+            vista.setImageViewBitmap(R.id.mic, dibujo(ctx, buscar(ctx, negocio).optString("personaje"), nombre));
+        }
         manager.updateAppWidget(id, vista);
     }
 
