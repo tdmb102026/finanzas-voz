@@ -17,5 +17,23 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
-  e.respondWith(caches.match(e.request, { ignoreSearch: true }).then(r => r || fetch(e.request)));
+  const url = new URL(e.request.url);
+  const isJS = url.pathname.endsWith('.js') || url.pathname.endsWith('.html');
+
+  if (isJS) {
+    // Archivos críticos: primero red (para actualizar rápido), luego cache
+    e.respondWith(
+      fetch(e.request).then(r => {
+        if (r.ok) {
+          const clone = r.clone();
+          caches.open(VERSION).then(c => c.put(e.request, clone));
+          return r;
+        }
+        return caches.match(e.request, { ignoreSearch: true }) || r;
+      }).catch(() => caches.match(e.request, { ignoreSearch: true }))
+    );
+  } else {
+    // Otros recursos: cache primero (más rápido)
+    e.respondWith(caches.match(e.request, { ignoreSearch: true }).then(r => r || fetch(e.request)));
+  }
 });
