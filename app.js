@@ -1285,7 +1285,10 @@ const arranque = (async () => {
   if (estado.negocios.length) {
     for (const n of estado.negocios) {
       if (n.nombre === 'ImportCap' || n.nombre.toLowerCase().includes('import')) {
+        console.log(`[Inventario] Inicializando ImportCap con negocio: ${n.id} (${n.nombre})`);
         await Inventario.inicializarImportCap(n.id);
+        const items = await DB.inventario();
+        console.log(`[Inventario] Productos después de init:`, items);
       }
     }
   }

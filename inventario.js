@@ -47,12 +47,18 @@ const Inventario = (() => {
   }
 
   async function pintar(negocio, padre = '#inventario') {
+    console.log(`[Inventario.pintar] negocio=${negocio}, padre=${padre}`);
     const items = await porNegocio(negocio);
+    console.log(`[Inventario.pintar] items encontrados:`, items.length);
     const $div = $(padre);
-    if (!$div) return;
+    if (!$div) {
+      console.log(`[Inventario.pintar] $div no encontrado para ${padre}`);
+      return;
+    }
     $div.innerHTML = '';
 
     if (!items.length) {
+      console.log(`[Inventario.pintar] Sin productos para este negocio`);
       $div.innerHTML = '<p style="text-align: center; color: var(--suave);">Sin productos. Agregar uno arriba.</p>';
       return;
     }
@@ -176,7 +182,11 @@ const Inventario = (() => {
 
   async function inicializarImportCap(negocioId) {
     const existentes = await porNegocio(negocioId);
-    if (existentes.length > 0) return;
+    console.log(`[Inventario.inicializarImportCap] negocioId=${negocioId}, existentes=${existentes.length}`);
+    if (existentes.length > 0) {
+      console.log(`[Inventario.inicializarImportCap] Ya existen productos, no se crean`);
+      return;
+    }
 
     const productos = [
       { nombre: 'Excavadora RC', stock: 100 },
@@ -185,9 +195,12 @@ const Inventario = (() => {
       { nombre: 'Tractor RC', stock: 24 },
     ];
 
+    console.log(`[Inventario.inicializarImportCap] Creando ${productos.length} productos...`);
     for (const p of productos) {
       await crear(negocioId, p.nombre, p.stock);
+      console.log(`[Inventario.inicializarImportCap] Creado: ${p.nombre}`);
     }
+    console.log(`[Inventario.inicializarImportCap] Todos los productos creados`);
   }
 
   async function registrarVentaPorVoz(conceptoNombre, cantidad, negocio) {
