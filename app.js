@@ -1281,6 +1281,14 @@ document.addEventListener('keydown', e => {
 // Arranque: Voz.oido espera a que estén cargados los conceptos.
 const arranque = (async () => {
   await cargarConceptos();
+  // Inicializar Inventario para negocios
+  if (estado.negocios.length) {
+    for (const n of estado.negocios) {
+      if (n.nombre === 'ImportCap' || n.nombre.toLowerCase().includes('import')) {
+        await Inventario.inicializarImportCap(n.id);
+      }
+    }
+  }
   pintarMes();
   pintarTipo();
   pintarMonto();

@@ -169,11 +169,43 @@ const Inventario = (() => {
     repintar();
   }
 
+  async function buscarPorConcepto(conceptoId) {
+    const items = await DB.inventario();
+    return items.find(i => i.conceptoId === conceptoId);
+  }
+
+  async function inicializarImportCap(negocioId) {
+    const existentes = await porNegocio(negocioId);
+    if (existentes.length > 0) return;
+
+    const productos = [
+      { nombre: 'Excavadora RC', stock: 100 },
+      { nombre: 'Volqueta RC', stock: 48 },
+      { nombre: 'Bulldozer RC', stock: 24 },
+      { nombre: 'Tractor RC', stock: 24 },
+    ];
+
+    for (const p of productos) {
+      await crear(negocioId, p.nombre, p.stock);
+    }
+  }
+
+  async function registrarVentaPorVoz(conceptoNombre, cantidad, negocio) {
+    const items = await porNegocio(negocio);
+    const item = items.find(i => i.nombre.toLowerCase().includes(conceptoNombre.toLowerCase().split(' ')[0]));
+    if (item) {
+      return await registrarMovimiento(item.id, 'venta', cantidad, `Venta por voz`, 'voz');
+    }
+    return null;
+  }
+
   return {
     crear,
     registrarMovimiento,
     porNegocio,
     pintar,
     agregarProducto,
+    inicializarImportCap,
+    registrarVentaPorVoz,
   };
 })();
