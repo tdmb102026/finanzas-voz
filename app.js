@@ -1,5 +1,6 @@
 // Anotar con teclado, resumen y presupuesto como el Excel de fer.
 // Montos siempre en centavos de dólar.
+const APP_VERSION = 'v30';
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
   'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
@@ -645,6 +646,17 @@ async function pintarAjustes() {
 function pintarConfig() {
   Voz.pintarAjustes();
   pintarNegocios();
+  mostrarVersion();
+}
+
+function mostrarVersion() {
+  const info = $('version-info');
+  if (!info) return;
+  info.innerHTML = `Versión: <strong>${APP_VERSION}</strong> (en tu navegador)`;
+  // Verificar si hay una versión más nueva disponible
+  if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+    navigator.serviceWorker.controller.postMessage({ tipo: 'obtenerVersion' });
+  }
 }
 
 // ---------- Mis negocios ----------
@@ -1282,15 +1294,21 @@ document.addEventListener('keydown', e => {
 const arranque = (async () => {
   await cargarConceptos();
   // Inicializar Inventario para negocios
+  console.log(`[Inventario] Negocios disponibles:`, estado.negocios.map(n => ({ id: n.id, nombre: n.nombre })));
   if (estado.negocios.length) {
+    let encontrado = false;
     for (const n of estado.negocios) {
       if (n.nombre === 'ImportCap' || n.nombre.toLowerCase().includes('import')) {
-        console.log(`[Inventario] Inicializando ImportCap con negocio: ${n.id} (${n.nombre})`);
+        console.log(`[Inventario] ✓ Encontrado ImportCap: ${n.id} (${n.nombre})`);
         await Inventario.inicializarImportCap(n.id);
         const items = await DB.inventario();
-        console.log(`[Inventario] Productos después de init:`, items);
+        console.log(`[Inventario] ✓ Productos creados:`, items.length, items);
+        encontrado = true;
       }
     }
+    if (!encontrado) console.log(`[Inventario] ✗ No se encontró negocio ImportCap. Negocios:`, estado.negocios.map(n => n.nombre));
+  } else {
+    console.log(`[Inventario] ✗ Sin negocios, no se inicializa inventario`);
   }
   pintarMes();
   pintarTipo();
