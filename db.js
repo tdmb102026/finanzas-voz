@@ -1,6 +1,6 @@
 // Guardado local en el teléfono (IndexedDB). Funciona sin internet.
 const DB = (() => {
-  const NOMBRE = 'finanzas', VERSION = 7;
+  const NOMBRE = 'finanzas', VERSION = 8;
 
   // Conceptos iniciales, tomados del Excel de fer. Presupuesto mensual en centavos.
   const CONCEPTOS_INICIALES = [
@@ -105,6 +105,8 @@ const DB = (() => {
         if (e.oldVersion < 6) db.createObjectStore('negocios', { keyPath: 'id' });
         // Versión 7: deudas y préstamos (lo que debes y lo que te deben), aparte de los movimientos.
         if (e.oldVersion < 7) db.createObjectStore('deudas', { keyPath: 'id' });
+        // Versión 8: inventario de productos para negocios (stock de artículos).
+        if (e.oldVersion < 8) db.createObjectStore('inventario', { keyPath: 'id' });
       };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
@@ -140,6 +142,10 @@ const DB = (() => {
     deudas: () => operar('deudas', 'readonly', t => t.getAll()),
     guardarDeuda: d => operar('deudas', 'readwrite', t => t.put(d)),
     borrarDeuda: id => operar('deudas', 'readwrite', t => t.delete(id)),
+    // Inventario: { id, nombre, negocio, stockActual, stockInicial, stockMinimo, historial: [{fecha, tipo, cantidad, nota, fuente}] }
+    inventario: () => operar('inventario', 'readonly', t => t.getAll()),
+    guardarInventario: i => operar('inventario', 'readwrite', t => t.put(i)),
+    borrarInventario: id => operar('inventario', 'readwrite', t => t.delete(id)),
     // Conceptos que trae un negocio nuevo: lo que suele pasar en un negocio pequeño de ventas.
     conceptosNegocio: (negocio, orden) => [
       ['ventas', 'Ventas', 'ingreso', 'Ventas', '💵'],

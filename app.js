@@ -159,6 +159,7 @@ async function pintarEspacios() {
   document.body.classList.add('con-negocios');
   $('espacios').hidden = false;
   $('anotar-traspaso').hidden = !estado.negocios.length;
+  $('nav-inventario').hidden = !estado.espacio;  // Solo si hay negocio activo
   // Frases por revisar de los otros espacios, para que no se pierdan de vista.
   const pend = {};
   for (const x of await DB.todos()) if (x.estado === 'pendiente') pend[negocioDe(x)] = (pend[negocioDe(x)] || 0) + 1;
@@ -949,12 +950,17 @@ async function pintarPendientes() {
 
 // ---------- Navegación ----------
 
+async function pintarInventario() {
+  Inventario.pintar(estado.espacio, '#inventario');
+}
+
 function repintar() {
   pintarMes();
   if (estado.vista === 'anotar') pintarTipo();
   if (estado.vista === 'movimientos') pintarMovimientos();
   if (estado.vista === 'resumen') pintarResumen();
   if (estado.vista === 'ajustes') pintarAjustes();
+  if (estado.vista === 'inventario') pintarInventario();
   if (estado.vista === 'config') pintarConfig();
   pintarPendientes();
 }
@@ -1260,6 +1266,9 @@ $('confirmar-reinicio').addEventListener('close', async () => {
     repintar();
   });
 });
+
+// Inventario: solo visible cuando hay negocio activo
+$('nuevo-producto').addEventListener('click', () => Inventario.agregarProducto(estado.espacio));
 
 // Teclado físico (para probar en computadora).
 document.addEventListener('keydown', e => {
