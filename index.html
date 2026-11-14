@@ -100,6 +100,14 @@
       <button type="button" id="nuevo-concepto" class="boton-ancho">+ Nuevo concepto</button>
     </section>
 
+    <!-- Inventario del negocio: productos y stock -->
+    <section id="vista-inventario" class="vista">
+      <h1 class="titulo">📦 Inventario</h1>
+      <p class="nota">Stock actual de los productos. Toca +/- para ajustar o "Historial" para ver movimientos.</p>
+      <div id="inventario"></div>
+      <button type="button" id="nuevo-producto" class="boton-ancho">+ Agregar producto</button>
+    </section>
+
     <!-- Ajustes: lo que se toca poco, aparte de la proyección para que no estorbe -->
     <section id="vista-config" class="vista">
       <h1 class="titulo">Ajustes</h1>
@@ -121,6 +129,7 @@
       <section class="tarjeta">
         <h2>Tu sesión</h2>
         <p id="voz-estado" class="nota arriba" role="status"></p>
+        <p id="version-info" class="nota" style="font-size: 0.9em; color: var(--suave);"></p>
         <button type="button" id="cerrar-sesion" class="boton-ancho peligro" hidden>Cerrar sesión</button>
         <details class="avanzado">
           <summary>Avanzado: servidor de la voz</summary>
@@ -150,6 +159,7 @@
     <button type="button" class="nav-btn" data-vista="movimientos"><i class="bicho" aria-hidden="true">🦎</i>Movimientos</button>
     <button type="button" class="nav-btn" data-vista="resumen"><i class="bicho" aria-hidden="true">🦉</i>Resumen</button>
     <button type="button" class="nav-btn" data-vista="ajustes"><i class="bicho" aria-hidden="true">🦅</i>Proyección</button>
+    <button type="button" class="nav-btn" data-vista="inventario" hidden id="nav-inventario"><i class="bicho" aria-hidden="true">📦</i>Inventario</button>
     <button type="button" class="nav-btn" data-vista="config"><i class="bicho" aria-hidden="true">🐢</i>Ajustes</button>
   </nav>
 
@@ -356,6 +366,7 @@
   <script src="graficos.js"></script>
   <script src="app.js"></script>
   <script src="cuentas.js"></script>
+  <script src="inventario.js"></script>
   <script src="voz.js"></script>
 </body>
 </html>

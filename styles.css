@@ -228,13 +228,15 @@ body[data-tipo="inversion"] .monto { color: var(--inversion); }
 /* ---------- Navegación y aviso ---------- */
 .nav {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   border-top: 1px solid var(--borde);
   background: var(--superficie);
   padding-bottom: env(safe-area-inset-bottom);
 }
 .nav-btn { border: 0; background: none; padding: 8px 1px 10px; font-size: 12.5px; font-weight: 600; color: var(--suave); min-width: 0; }
 .nav-btn.activo { color: var(--acento); }
+.nav:has(#nav-inventario:not([hidden])) .nav-btn { font-size: 10.5px; }
 
 .aviso {
   position: fixed;
@@ -652,3 +654,27 @@ dialog .abonar input { margin: 0; flex: 1; }
 .mes button:disabled { opacity: .25; }
 .volver-hoy { display: block; width: 100%; margin: 0 0 8px; padding: 7px 10px; border: 0; border-radius: 10px; background: var(--acento); color: var(--sobre-acento); font-weight: 700; font-size: 13.5px; }
 body.mes-pasado .mes-mini h1 { color: var(--acento); }
+
+/* Inventario */
+#vista-inventario { padding: 16px; }
+#inventario { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+.inventario-card { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px; padding: 12px; }
+.inventario-card.alerta { border-color: #ff9800; background: rgba(255, 152, 0, 0.05); }
+.inventario-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.inventario-nombre { font-weight: 600; font-size: 16px; }
+.inventario-stock { font-size: 14px; color: var(--suave); }
+.inventario-stock.stock-bajo { color: #ff9800; font-weight: 600; }
+.inventario-acciones { display: flex; gap: 8px; }
+.inventario-acciones button { flex: 1; padding: 8px; font-size: 13px; border: 1px solid var(--borde); border-radius: 8px; background: var(--fondo); cursor: pointer; }
+.inventario-acciones button:active { background: var(--tecla); }
+.historial-list { background: var(--fondo); border-radius: 10px; padding: 12px; max-height: 60vh; overflow-y: auto; margin: 12px 0; }
+.historial-row { display: flex; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--borde); font-size: 13px; align-items: center; }
+.historial-row:last-child { border: 0; }
+.historial-fecha { color: var(--suave); min-width: 80px; }
+.historial-tipo { font-size: 18px; }
+.historial-cantidad { font-weight: 600; min-width: 80px; }
+.historial-nota { color: var(--suave); flex: 1; }
+.modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); display: flex; align-items: flex-end; z: 1000; }
+.modal { background: var(--tarjeta); width: 100%; max-height: 90vh; border-radius: 16px 16px 0 0; padding: 20px; overflow-y: auto; }
+.modal h2 { margin: 0 0 16px; font-size: 18px; }
+.modal button { margin-top: 12px; width: 100%; padding: 12px; border: 0; border-radius: 10px; background: var(--acento); color: var(--sobre-acento); font-weight: 600; cursor: pointer; }

@@ -1,5 +1,6 @@
 // Anotar con teclado, resumen y presupuesto como el Excel de fer.
 // Montos siempre en centavos de dólar.
+const APP_VERSION = 'v31';
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
   'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
@@ -159,6 +160,7 @@ async function pintarEspacios() {
   document.body.classList.add('con-negocios');
   $('espacios').hidden = false;
   $('anotar-traspaso').hidden = !estado.negocios.length;
+  $('nav-inventario').hidden = !estado.espacio;  // Solo si hay negocio activo
   // Frases por revisar de los otros espacios, para que no se pierdan de vista.
   const pend = {};
   for (const x of await DB.todos()) if (x.estado === 'pendiente') pend[negocioDe(x)] = (pend[negocioDe(x)] || 0) + 1;
@@ -644,6 +646,17 @@ async function pintarAjustes() {
 function pintarConfig() {
   Voz.pintarAjustes();
   pintarNegocios();
+  mostrarVersion();
+}
+
+function mostrarVersion() {
+  const info = $('version-info');
+  if (!info) return;
+  info.innerHTML = `Versión: <strong>${APP_VERSION}</strong> (en tu navegador)`;
+  // Verificar si hay una versión más nueva disponible
+  if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+    navigator.serviceWorker.controller.postMessage({ tipo: 'obtenerVersion' });
+  }
 }
 
 // ---------- Mis negocios ----------
@@ -949,12 +962,17 @@ async function pintarPendientes() {
 
 // ---------- Navegación ----------
 
+async function pintarInventario() {
+  Inventario.pintar(estado.espacio, 'inventario');
+}
+
 function repintar() {
   pintarMes();
   if (estado.vista === 'anotar') pintarTipo();
   if (estado.vista === 'movimientos') pintarMovimientos();
   if (estado.vista === 'resumen') pintarResumen();
   if (estado.vista === 'ajustes') pintarAjustes();
+  if (estado.vista === 'inventario') pintarInventario();
   if (estado.vista === 'config') pintarConfig();
   pintarPendientes();
 }
@@ -1261,6 +1279,9 @@ $('confirmar-reinicio').addEventListener('close', async () => {
   });
 });
 
+// Inventario: solo visible cuando hay negocio activo
+$('nuevo-producto').addEventListener('click', () => Inventario.agregarProducto(estado.espacio));
+
 // Teclado físico (para probar en computadora).
 document.addEventListener('keydown', e => {
   if (estado.vista !== 'anotar' || document.querySelector('dialog[open]')) return;
@@ -1272,6 +1293,23 @@ document.addEventListener('keydown', e => {
 // Arranque: Voz.oido espera a que estén cargados los conceptos.
 const arranque = (async () => {
   await cargarConceptos();
+  // Inicializar Inventario para negocios
+  console.log(`[Inventario] Negocios disponibles:`, estado.negocios.map(n => ({ id: n.id, nombre: n.nombre })));
+  if (estado.negocios.length) {
+    let encontrado = false;
+    for (const n of estado.negocios) {
+      if (n.nombre === 'ImportCap' || n.nombre.toLowerCase().includes('import')) {
+        console.log(`[Inventario] ✓ Encontrado ImportCap: ${n.id} (${n.nombre})`);
+        await Inventario.inicializarImportCap(n.id);
+        const items = await DB.inventario();
+        console.log(`[Inventario] ✓ Productos creados:`, items.length, items);
+        encontrado = true;
+      }
+    }
+    if (!encontrado) console.log(`[Inventario] ✗ No se encontró negocio ImportCap. Negocios:`, estado.negocios.map(n => n.nombre));
+  } else {
+    console.log(`[Inventario] ✗ Sin negocios, no se inicializa inventario`);
+  }
   pintarMes();
   pintarTipo();
   pintarMonto();
