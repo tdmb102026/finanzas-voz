@@ -116,13 +116,25 @@ const Voz = (() => {
 
   // Si ya corregiste una frase igual (cambia solo el monto), se anota sin preguntarle a la IA.
   // Solo cuentan los ejemplos de conceptos del mismo espacio (Personal o ese negocio).
+  // Devuelve { c, monto } (monto en centavos) o null.
   function yaAprendida(frase, esp) {
     const k = clave(frase);
-    const numeros = frase.match(/\d+(?:[.,]\d{1,2})?/g) || [];
+    const numeros = frase.match(/\d+(?:[.,:]\d{1,2})?/g) || [];
     if (!k || numeros.length !== 1) return null;
     const suyos = conceptosDe(esp);
     const ej = ejemplos().reverse().find(x => clave(x.frase) === k && suyos.some(c => c.id === x.concepto));
-    return ej && suyos.find(c => c.id === ej.concepto) || null;
+    const c = ej && suyos.find(c => c.id === ej.concepto);
+    return c ? { c, monto: montoParecido(frase, ej.monto) } : null;
+  }
+
+  // "nueve cincuenta" llega del dictado como "950": si el ejemplo aprendido era de 9.50, se lee 9.50.
+  // Se elige el monto (entero o con centavos) más cercano al del ejemplo; con "$" o "dólares" va entero.
+  function montoParecido(frase, ejemplo) {
+    const n = montoRapido(frase);
+    const m = frase.match(/\d+/);
+    if (!ejemplo || n < 10000 || n % 10000 === 0 || /\$|d[oó]lar/i.test(frase) || !/^\d{3,4}$/.test(m[0])) return n;
+    const lejos = x => Math.abs(Math.log(x / (ejemplo * 100)));
+    return lejos(n / 100) < lejos(n) ? Math.round(n / 100) : n;
   }
 
   // ---------- Escuchar ----------
@@ -180,8 +192,8 @@ const Voz = (() => {
 
   // Monto aproximado sin internet: el primer número de la frase.
   function montoRapido(frase) {
-    const m = frase.match(/\d+(?:[.,]\d{1,2})?/);
-    return (m && aCentavos(m[0])) || 0;
+    const m = frase.match(/\d+(?:[.,:]\d{1,2})?/);
+    return (m && aCentavos(m[0].replace(':', '.'))) || 0;
   }
 
   // negocio: '' = personal, o el id del negocio (el widget de un negocio lo manda).
@@ -250,9 +262,10 @@ const Voz = (() => {
     const esp = negocioPorId(negocioDe(mov)) ? negocioDe(mov) : '';
     if (esp !== negocioDe(mov)) mov = { ...mov, negocio: esp };
     const suyos = conceptosDe(esp);
-    const c = mov.monto > 0 && yaAprendida(mov.frase, esp);
-    if (c) {
-      const m = { ...mov, tipo: c.tipo, concepto: c.id, estado: 'listo', ia: 'ok' };
+    const a = mov.monto > 0 && yaAprendida(mov.frase, esp);
+    if (a) {
+      const c = a.c;
+      const m = { ...mov, monto: a.monto, tipo: c.tipo, concepto: c.id, estado: 'listo', ia: 'ok' };
       await DB.guardar(m);
       c.usos = (c.usos || 0) + 1;
       await DB.guardarConcepto(c);

@@ -46,7 +46,7 @@ const Inventario = (() => {
     return item;
   }
 
-  async function pintar(negocio, padre = '#inventario') {
+  async function pintar(negocio, padre = 'inventario') {
     console.log(`[Inventario.pintar] negocio=${negocio}, padre=${padre}`);
     const items = await porNegocio(negocio);
     console.log(`[Inventario.pintar] items encontrados:`, items.length);

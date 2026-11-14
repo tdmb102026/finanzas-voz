@@ -228,13 +228,15 @@ body[data-tipo="inversion"] .monto { color: var(--inversion); }
 /* ---------- Navegación y aviso ---------- */
 .nav {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   border-top: 1px solid var(--borde);
   background: var(--superficie);
   padding-bottom: env(safe-area-inset-bottom);
 }
 .nav-btn { border: 0; background: none; padding: 8px 1px 10px; font-size: 12.5px; font-weight: 600; color: var(--suave); min-width: 0; }
 .nav-btn.activo { color: var(--acento); }
+.nav:has(#nav-inventario:not([hidden])) .nav-btn { font-size: 10.5px; }
 
 .aviso {
   position: fixed;

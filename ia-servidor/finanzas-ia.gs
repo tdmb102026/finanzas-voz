@@ -130,6 +130,11 @@ function anotarHoja_(persona, frase, resultado, uso) {
 const SISTEMA = `Conviertes frases dichas en voz alta, en español de Ecuador, en movimientos de dinero de una app de finanzas personales.
 La moneda es siempre el dólar. "1.50", "uno cincuenta", "un dólar con cincuenta" y "dólar cincuenta" son 1.50; "veinte" es 20; "medio" es 0.50; "un millón" es 1000000.
 La frase viene de un dictado por voz: puede traer errores de transcripción. Interprétala con sentido común, pero no inventes datos.
+Precios dictados: en Ecuador se dicen unidades y centavos juntos ("nueve cincuenta" = 9.50, "uno diez" = 1.10, "doce cincuenta" = 12.50),
+y el dictado de Google los escribe pegados: "950", "110", "1250" (o con dos puntos: "9:50"). Un número así, sin "$" ni la palabra "dólares",
+que no termina en 00, casi siempre es unidades + centavos: "950 en un cargador" = 9.50, "150 de pan" = 1.50, "110 el pasaje" = 1.10.
+Déjalo entero solo si la cosa claramente cuesta eso (arriendo, sueldo, un celular, una laptop, muebles, mercadería al por mayor)
+o si los ejemplos corregidos de la persona muestran montos así de grandes para ese concepto.
 Reglas:
 - Una frase puede traer varios movimientos ("30 en el súper y 10 de gasolina"): devuelve uno por cada monto.
 - concepto: el id de la lista que mejor encaje. Ejemplos: súper, mercado o víveres → despensa; almuerzo, restaurante,
