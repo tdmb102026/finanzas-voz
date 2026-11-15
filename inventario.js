@@ -22,6 +22,7 @@ const Inventario = (() => {
       stockActual: stockInicial || 0,
       stockInicial: stockInicial || 0,
       stockMinimo: STOCK_MINIMO_DEFAULT,
+      desde: fechaLocal().slice(0, 10),
       historial: [],
     };
     await DB.guardarInventario(item);
@@ -48,6 +49,7 @@ const Inventario = (() => {
 
   async function pintar(negocio, padre = 'inventario') {
     console.log(`[Inventario.pintar] negocio=${negocio}, padre=${padre}`);
+    await sincronizar(negocio);
     const items = await porNegocio(negocio);
     console.log(`[Inventario.pintar] items encontrados:`, items.length);
     const $div = $(padre);
@@ -220,13 +222,86 @@ const Inventario = (() => {
     console.log(`[Inventario.inicializarImportCap] Todos los productos creados`);
   }
 
-  async function registrarVentaPorVoz(conceptoNombre, cantidad, negocio) {
-    const items = await porNegocio(negocio);
-    const item = items.find(i => i.nombre.toLowerCase().includes(conceptoNombre.toLowerCase().split(' ')[0]));
-    if (item) {
-      return await registrarMovimiento(item.id, 'venta', cantidad, `Venta por voz`, 'voz');
+  // ---------- Ventas anotadas (por voz o con frase) descuentan stock solas ----------
+  // Inventarios creados antes de guardar `desde` empiezan a contar desde que fer los cargó.
+  const DESDE_ANTIGUO = '2026-11-14';
+  const NUMEROS = { un: 1, una: 1, uno: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10 };
+  // "Bull doser", "buldozer" y "bulldozer" quedan iguales: sin tildes, espacios ni letras repetidas, z = s.
+  const plano = t => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/z/g, 's').replace(/[^a-z0-9]/g, '').replace(/(.)\1+/g, '$1');
+  const raiz = item => plano(item.nombre.toLowerCase().split(/\s+/)[0]).slice(0, 6);
+
+  function cantidadEn(texto, item) {
+    const palabras = String(texto).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9]+/);
+    const r = raiz(item);
+    const i = palabras.findIndex((w, k) => plano(w).startsWith(r) || plano(w + (palabras[k + 1] || '')).startsWith(r));
+    const antes = palabras[i - 1];
+    if (antes && NUMEROS[antes]) return NUMEROS[antes];
+    if (antes && /^\d{1,3}$/.test(antes)) return Number(antes);
+    return 1;
+  }
+
+  function productoDe(m, items) {
+    for (const texto of [m.nota, m.frase]) {
+      const t = plano(texto);
+      const item = items.find(x => t.includes(raiz(x)));
+      if (item) return { item, cantidad: cantidadEn(texto, item) };
     }
     return null;
+  }
+
+  // Cuadra el stock con las ventas del negocio: agrega las nuevas y devuelve las que se borraron o cambiaron.
+  // Una sincronización a la vez, para no descontar dos veces la misma venta.
+  let cola = Promise.resolve();
+  function sincronizar(negocio) {
+    const r = cola.then(() => cuadrar(negocio));
+    cola = r.catch(() => {});
+    return r;
+  }
+
+  async function cuadrar(negocio) {
+    const items = await porNegocio(negocio);
+    if (!items.length) return [];
+    const desdeMin = items.reduce((a, x) => ((x.desde || DESDE_ANTIGUO) < a ? (x.desde || DESDE_ANTIGUO) : a), '9999');
+    const conceptos = {};
+    for (const c of await DB.conceptos()) conceptos[c.id] = c;
+    const quiere = new Map();
+    for (const m of await DB.todos()) {
+      if ((m.negocio || '') !== negocio || m.estado === 'pendiente' || m.tipo !== 'ingreso') continue;
+      if (String(m.fecha).slice(0, 10) < desdeMin) continue;
+      const p = productoDe(m, items);
+      if (p && String(m.fecha).slice(0, 10) >= (p.item.desde || DESDE_ANTIGUO)) quiere.set(m.id, { ...p, m });
+    }
+    const bajos = [];
+    for (const item of items) {
+      let cambio = false;
+      const antes = item.stockActual;
+      item.historial = item.historial.filter(h => {
+        if (!h.mov) return true;
+        const q = quiere.get(h.mov);
+        if (q && q.item.id === item.id && q.cantidad === h.cantidad) return true;
+        item.stockActual += h.cantidad;
+        cambio = true;
+        return false;
+      });
+      for (const [id, q] of quiere) {
+        if (q.item.id !== item.id || item.historial.some(h => h.mov === id)) continue;
+        item.historial.push({ fecha: String(q.m.fecha).slice(0, 10), tipo: 'venta', cantidad: q.cantidad,
+          nota: q.m.nota || q.m.frase || 'Venta', fuente: 'venta', mov: id });
+        item.stockActual -= q.cantidad;
+        cambio = true;
+      }
+      if (cambio) {
+        await DB.guardarInventario(item);
+        if (item.stockActual <= item.stockMinimo && antes > item.stockMinimo) bajos.push(item);
+      }
+    }
+    return bajos;
+  }
+
+  async function avisarBajos(negocio) {
+    const bajos = await sincronizar(negocio);
+    if (bajos.length) avisar(`⚠️ Stock bajo: ${bajos.map(b => `${b.nombre} (${b.stockActual})`).join(', ')}`, null, 5000);
   }
 
   return {
@@ -236,6 +311,7 @@ const Inventario = (() => {
     pintar,
     agregarProducto,
     inicializarImportCap,
-    registrarVentaPorVoz,
+    sincronizar,
+    avisarBajos,
   };
 })();

@@ -658,7 +658,7 @@ body.mes-pasado .mes-mini h1 { color: var(--acento); }
 /* Inventario */
 #vista-inventario { padding: 16px; }
 #inventario { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
-.inventario-card { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px; padding: 12px; }
+.inventario-card { background: var(--superficie); border: 1px solid var(--borde); border-radius: 12px; padding: 12px; }
 .inventario-card.alerta { border-color: #ff9800; background: rgba(255, 152, 0, 0.05); }
 .inventario-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
 .inventario-nombre { font-weight: 600; font-size: 16px; }
@@ -674,7 +674,7 @@ body.mes-pasado .mes-mini h1 { color: var(--acento); }
 .historial-tipo { font-size: 18px; }
 .historial-cantidad { font-weight: 600; min-width: 80px; }
 .historial-nota { color: var(--suave); flex: 1; }
-.modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); display: flex; align-items: flex-end; z: 1000; }
-.modal { background: var(--tarjeta); width: 100%; max-height: 90vh; border-radius: 16px 16px 0 0; padding: 20px; overflow-y: auto; }
+.modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); display: flex; align-items: flex-end; z-index: 1000; }
+.modal { background: var(--superficie); width: 100%; max-height: 90vh; border-radius: 16px 16px 0 0; padding: 20px; overflow-y: auto; }
 .modal h2 { margin: 0 0 16px; font-size: 18px; }
 .modal button { margin-top: 12px; width: 100%; padding: 12px; border: 0; border-radius: 10px; background: var(--acento); color: var(--sobre-acento); font-weight: 600; cursor: pointer; }
