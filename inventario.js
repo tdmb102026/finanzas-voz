@@ -90,13 +90,31 @@ const Inventario = (() => {
     }));
   }
 
+  // prompt() no funciona dentro de la app Android (WebView): se usa un diálogo propio.
+  function pedir({ titulo, nota = '', conNombre = false, textoCantidad = 'Unidades', cantidad = '' }) {
+    const d = $('inv-dialogo'), f = $('inv-form');
+    $('inv-titulo').textContent = titulo;
+    $('inv-nota').textContent = nota;
+    $('inv-nota').hidden = !nota;
+    $('inv-nombre-fila').hidden = !conNombre;
+    $('inv-cantidad-texto').textContent = textoCantidad;
+    f.nombre.value = '';
+    f.cantidad.value = cantidad;
+    d.showModal();
+    setTimeout(() => (conNombre ? f.nombre : f.cantidad).focus(), 50);
+    return new Promise(listo => d.addEventListener('close', () => {
+      if (d.returnValue !== 'guardar') return listo(null);
+      listo({ nombre: f.nombre.value.trim(), cantidad: parseInt(f.cantidad.value, 10) });
+    }, { once: true }));
+  }
+
   async function restarStock(id) {
     const items = await DB.inventario();
     const item = items.find(i => i.id === id);
     if (!item) return;
-    const cantidad = prompt(`Restar stock de "${item.nombre}". ¿Cuántas unidades? (actual: ${item.stockActual})`);
-    if (!cantidad) return;
-    const q = parseInt(cantidad);
+    const r = await pedir({ titulo: `Vender ${item.nombre}`, nota: `Hay ${item.stockActual} unidades.`, textoCantidad: '¿Cuántas salen?', cantidad: 1 });
+    if (!r) return;
+    const q = r.cantidad;
     if (q > 0) {
       await registrarMovimiento(id, 'venta', q, `Venta manual`);
       avisar(`Vendidas ${q} unidades de ${item.nombre}`);
@@ -110,9 +128,9 @@ const Inventario = (() => {
     const items = await DB.inventario();
     const item = items.find(i => i.id === id);
     if (!item) return;
-    const cantidad = prompt(`Agregar stock de "${item.nombre}". ¿Cuántas unidades? (actual: ${item.stockActual})`);
-    if (!cantidad) return;
-    const q = parseInt(cantidad);
+    const r = await pedir({ titulo: `Agregar ${item.nombre}`, nota: `Hay ${item.stockActual} unidades.`, textoCantidad: '¿Cuántas entran?', cantidad: 1 });
+    if (!r) return;
+    const q = r.cantidad;
     if (q > 0) {
       await registrarMovimiento(id, 'compra', q, `Compra manual`);
       avisar(`Agregadas ${q} unidades de ${item.nombre}`);
@@ -161,11 +179,10 @@ const Inventario = (() => {
   }
 
   async function agregarProducto(negocio) {
-    const nombre = prompt('Nombre del producto:');
-    if (!nombre) return;
-    const stockIni = prompt(`Stock inicial de "${nombre}":`, '0');
-    if (!stockIni) return;
-    const stock = parseInt(stockIni);
+    const r = await pedir({ titulo: 'Nuevo producto', conNombre: true, textoCantidad: 'Stock inicial', cantidad: 0 });
+    if (!r || !r.nombre) return;
+    const nombre = r.nombre;
+    const stock = r.cantidad;
     if (isNaN(stock) || stock < 0) {
       avisar('Stock inválido');
       return;
