@@ -322,14 +322,10 @@ const Voz = (() => {
       if (listo) {
         c.usos = (c.usos || 0) + 1;
         await DB.guardarConcepto(c);
-        // Registrar venta en inventario si es un ingreso (venta) en un negocio
-        if (c.tipo === 'ingreso' && esp) {
-          const cantidad = monto / 100;
-          await Inventario.registrarVentaPorVoz(c.nombre, Math.round(cantidad), esp);
-        }
       }
       movs.push(m);
     }
+    if (esp) await Inventario.avisarBajos(esp);
     // Lo que no se pudo anotar (por ejemplo un pago de alguien sin deuda) queda la frase para revisar.
     if (fallidos || !extras.length && !movs.length) {
       const m = { ...mov, id: movs.length ? nuevoId() : mov.id, ia: 'duda' };
