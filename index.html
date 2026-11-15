@@ -277,6 +277,23 @@
     </form>
   </dialog>
 
+  <dialog id="inv-dialogo">
+    <form method="dialog" id="inv-form">
+      <h2 id="inv-titulo"></h2>
+      <p id="inv-nota" class="nota"></p>
+      <label id="inv-nombre-fila">Nombre del producto
+        <input name="nombre" autocomplete="off" maxlength="40" placeholder="Por ejemplo Excavadora RC">
+      </label>
+      <label><span id="inv-cantidad-texto">Unidades</span>
+        <input name="cantidad" type="number" inputmode="numeric" min="0" step="1" autocomplete="off">
+      </label>
+      <div class="editor-botones">
+        <button value="cancelar" formnovalidate>Cancelar</button>
+        <button value="guardar" class="principal">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="editor-deuda">
     <form method="dialog" id="deuda-form">
       <h2 id="deuda-titulo">Deuda o préstamo</h2>
