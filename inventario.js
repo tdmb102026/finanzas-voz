@@ -65,6 +65,21 @@ const Inventario = (() => {
       return;
     }
 
+    // Resumen de todo el inventario arriba.
+    const mes = fechaLocal().slice(0, 7);
+    const vendidas = item => item.historial.filter(h => h.tipo === 'venta' && String(h.fecha).startsWith(mes))
+      .reduce((a, h) => a + h.cantidad, 0);
+    const total = items.reduce((a, x) => a + x.stockActual, 0);
+    const vendidasMes = items.reduce((a, x) => a + vendidas(x), 0);
+    const bajos = items.filter(x => x.stockActual <= x.stockMinimo);
+    const $res = document.createElement('div');
+    $res.className = 'inventario-resumen';
+    $res.innerHTML = `
+      <div><strong>${total}</strong><small>unidades en bodega</small></div>
+      <div><strong>${vendidasMes}</strong><small>vendidas este mes</small></div>
+      <div><strong class="${bajos.length ? 'stock-bajo' : ''}">${bajos.length}</strong><small>con stock bajo</small></div>`;
+    $div.appendChild($res);
+
     items.forEach(item => {
       const alerta = item.stockActual <= item.stockMinimo;
       const $card = document.createElement('div');
@@ -74,6 +89,7 @@ const Inventario = (() => {
           <span class="inventario-nombre">${escapar(item.nombre)}</span>
           <span class="inventario-stock${alerta ? ' stock-bajo' : ''}">${item.stockActual} unidades</span>
         </div>
+        <p class="inventario-vendidas">Vendidas este mes: ${vendidas(item)}</p>
         <div class="inventario-acciones">
           <button type="button" class="inv-menos" data-id="${escapar(item.id)}">−</button>
           <button type="button" class="inv-mas" data-id="${escapar(item.id)}">+</button>
@@ -231,23 +247,38 @@ const Inventario = (() => {
     .replace(/z/g, 's').replace(/[^a-z0-9]/g, '').replace(/(.)\1+/g, '$1');
   const raiz = item => plano(item.nombre.toLowerCase().split(/\s+/)[0]).slice(0, 6);
 
-  function cantidadEn(texto, item) {
-    const palabras = String(texto).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9]+/);
-    const r = raiz(item);
-    const i = palabras.findIndex((w, k) => plano(w).startsWith(r) || plano(w + (palabras[k + 1] || '')).startsWith(r));
+  const palabrasDe = texto => String(texto).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9]+/);
+  // La cantidad es la palabra antes del producto: "dos excavadoras" = 2; si no dice, 1.
+  function numeroAntes(palabras, i) {
     const antes = palabras[i - 1];
     if (antes && NUMEROS[antes]) return NUMEROS[antes];
     if (antes && /^\d{1,3}$/.test(antes)) return Number(antes);
     return 1;
   }
 
-  function productoDe(m, items) {
+  function cantidadEn(texto, item) {
+    const palabras = palabrasDe(texto);
+    const r = raiz(item);
+    return numeroAntes(palabras, palabras.findIndex((w, k) => plano(w).startsWith(r) || plano(w + (palabras[k + 1] || '')).startsWith(r)));
+  }
+
+  // Un combo es uno de cada producto del negocio: "vendí dos combos" saca 2 de cada uno.
+  function esCombo(texto) {
+    const palabras = palabrasDe(texto);
+    const i = palabras.findIndex(w => w === 'combo' || w === 'combos');
+    return i < 0 ? 0 : numeroAntes(palabras, i);
+  }
+
+  // Lo que salió en una venta: [{ item, cantidad }] (vacío si no nombra productos).
+  function productosDe(m, items) {
     for (const texto of [m.nota, m.frase]) {
+      const combos = esCombo(texto);
+      if (combos) return items.map(item => ({ item, cantidad: combos }));
       const t = plano(texto);
       const item = items.find(x => t.includes(raiz(x)));
-      if (item) return { item, cantidad: cantidadEn(texto, item) };
+      if (item) return [{ item, cantidad: cantidadEn(texto, item) }];
     }
-    return null;
+    return [];
   }
 
   // Cuadra el stock con las ventas del negocio: agrega las nuevas y devuelve las que se borraron o cambiaron.
@@ -269,8 +300,8 @@ const Inventario = (() => {
     for (const m of await DB.todos()) {
       if ((m.negocio || '') !== negocio || m.estado === 'pendiente' || m.tipo !== 'ingreso') continue;
       if (String(m.fecha).slice(0, 10) < desdeMin) continue;
-      const p = productoDe(m, items);
-      if (p && String(m.fecha).slice(0, 10) >= (p.item.desde || DESDE_ANTIGUO)) quiere.set(m.id, { ...p, m });
+      const ps = productosDe(m, items).filter(p => String(m.fecha).slice(0, 10) >= (p.item.desde || DESDE_ANTIGUO));
+      if (ps.length) quiere.set(m.id, ps.map(p => ({ ...p, m })));
     }
     const bajos = [];
     for (const item of items) {
@@ -278,14 +309,15 @@ const Inventario = (() => {
       const antes = item.stockActual;
       item.historial = item.historial.filter(h => {
         if (!h.mov) return true;
-        const q = quiere.get(h.mov);
-        if (q && q.item.id === item.id && q.cantidad === h.cantidad) return true;
+        const q = (quiere.get(h.mov) || []).find(x => x.item.id === item.id);
+        if (q && q.cantidad === h.cantidad) return true;
         item.stockActual += h.cantidad;
         cambio = true;
         return false;
       });
-      for (const [id, q] of quiere) {
-        if (q.item.id !== item.id || item.historial.some(h => h.mov === id)) continue;
+      for (const [id, lista] of quiere) {
+        const q = lista.find(x => x.item.id === item.id);
+        if (!q || item.historial.some(h => h.mov === id)) continue;
         item.historial.push({ fecha: String(q.m.fecha).slice(0, 10), tipo: 'venta', cantidad: q.cantidad,
           nota: q.m.nota || q.m.frase || 'Venta', fuente: 'venta', mov: id });
         item.stockActual -= q.cantidad;
