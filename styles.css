@@ -665,6 +665,13 @@ body.mes-pasado .mes-mini h1 { color: var(--acento); }
 .inventario-stock { font-size: 14px; color: var(--suave); }
 .inventario-stock.stock-bajo { color: #ff9800; font-weight: 600; }
 .inventario-acciones { display: flex; gap: 8px; }
+.inventario-resumen { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; background: var(--superficie); border: 1px solid var(--borde); border-radius: 12px; padding: 12px; text-align: center; }
+.inventario-resumen strong { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
+.inventario-resumen small { color: var(--suave); font-size: 12px; }
+.inventario-vendidas { margin: -4px 0 10px; font-size: 13px; color: var(--suave); }
+.productos-venta { margin-top: 14px; }
+.productos-venta h2 { font-size: 14px; color: var(--suave); font-weight: 600; margin: 0 0 8px; }
+.cat small { display: block; font-size: 11px; color: var(--suave); font-weight: 400; }
 .inventario-acciones button { flex: 1; padding: 8px; font-size: 13px; border: 1px solid var(--borde); border-radius: 8px; background: var(--fondo); cursor: pointer; }
 .inventario-acciones button:active { background: var(--tecla); }
 .historial-list { background: var(--fondo); border-radius: 10px; padding: 12px; max-height: 60vh; overflow-y: auto; margin: 12px 0; }

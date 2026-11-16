@@ -1,6 +1,6 @@
 // Anotar con teclado, resumen y presupuesto como el Excel de fer.
 // Montos siempre en centavos de dólar.
-const APP_VERSION = 'v33';
+const APP_VERSION = 'v34';
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
   'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
@@ -197,6 +197,27 @@ function pintarTipo() {
   $('conceptos').innerHTML = lista.map(c =>
     `<button type="button" class="cat" data-concepto="${escapar(c.id)}"><span>${escapar(c.icono)}</span>${escapar(c.nombre)}</button>`
   ).join('');
+  pintarProductosVenta();
+}
+
+// En Venta de un negocio con inventario: un botón por producto y uno de Combo (uno de cada).
+// Anotan la venta en el concepto de ventas con el producto en la nota, y el inventario lo descuenta.
+async function pintarProductosVenta() {
+  const caja = $('productos-venta');
+  const esp = estado.espacio;
+  const items = esp && estado.tipo === 'ingreso' ? await Inventario.porNegocio(esp) : [];
+  if (esp !== estado.espacio) return;
+  caja.hidden = !items.length;
+  if (!items.length) return;
+  $('productos-botones').innerHTML = items.map(i =>
+    `<button type="button" class="cat" data-producto="${escapar(i.nombre)}"><span>📦</span>${escapar(i.nombre)}<small>quedan ${i.stockActual}</small></button>`
+  ).join('') + (items.length > 1
+    ? `<button type="button" class="cat" data-producto="Combo"><span>🎁</span>Combo<small>uno de cada</small></button>` : '');
+}
+
+function conceptoVentas() {
+  const suyos = conceptosDe().filter(c => c.tipo === 'ingreso' && !c.oculto);
+  return suyos.find(c => /venta/i.test(c.nombre) || /ventas/.test(c.id)) || suyos[0];
 }
 
 function pintarMonto() {
@@ -222,13 +243,13 @@ function teclear(k) {
   $('ayuda').classList.remove('alerta');
 }
 
-async function anotar(conceptoId) {
+async function anotar(conceptoId, nota = '') {
   const centavos = aCentavos(estado.entrada);
   if (!centavos) {
     $('ayuda').textContent = 'Primero escribe el monto';
     $('ayuda').classList.add('alerta');
     vibrar([40, 40, 40]);
-    return;
+    return false;
   }
   const c = concepto(conceptoId);
   const mov = {
@@ -238,7 +259,7 @@ async function anotar(conceptoId) {
     moneda: 'USD',
     concepto: c.id,
     fecha: fechaAnotar(),
-    nota: '',
+    nota,
     frase: '',
     negocio: estado.espacio,
     estado: 'listo',
@@ -250,8 +271,9 @@ async function anotar(conceptoId) {
   c.usos = (c.usos || 0) + 1;
   await DB.guardarConcepto(c);
   vibrar(30);
-  avisar(`Anotado${esMesActual() ? '' : ' en ' + nombreMes(estado.mes)}: ${TIPOS[mov.tipo].texto} ${dinero(mov.monto)}, ${c.nombre.toLowerCase()}`, async () => {
+  avisar(`Anotado${esMesActual() ? '' : ' en ' + nombreMes(estado.mes)}: ${TIPOS[mov.tipo].texto} ${dinero(mov.monto)}, ${nota ? nota.toLowerCase() : c.nombre.toLowerCase()}`, async () => {
     await DB.borrar(mov.id);
+    if (mov.negocio) await Inventario.sincronizar(mov.negocio);
     c.usos = Math.max(0, c.usos - 1);
     await DB.guardarConcepto(c);
   });
@@ -1023,6 +1045,15 @@ $('conceptos').addEventListener('click', async e => {
   const b = e.target.closest('.cat');
   if (!b) return;
   await anotar(b.dataset.concepto);
+  pintarTipo();
+});
+$('productos-botones').addEventListener('click', async e => {
+  const b = e.target.closest('[data-producto]');
+  const c = b && conceptoVentas();
+  if (!c) return;
+  const esp = estado.espacio;
+  const hecho = await anotar(c.id, b.dataset.producto);
+  if (hecho !== false) await Inventario.avisarBajos(esp);
   pintarTipo();
 });
 
