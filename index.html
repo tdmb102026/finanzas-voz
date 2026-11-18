@@ -304,11 +304,22 @@
       <label>Nombre
         <input name="nombre" autocomplete="off" maxlength="40">
       </label>
-      <label>Stock inicial (con cuántas empezaste)
-        <input name="inicial" type="number" inputmode="numeric" min="0" step="1">
+      <label>¿Se vende por partes? Cada uno trae (1 = no)
+        <input name="partes" type="number" inputmode="numeric" min="1" max="100" step="1">
+      </label>
+      <div id="inv-editar-partes">
+        <label>Cómo le dices a uno entero
+          <input name="unidad" autocomplete="off" maxlength="30" placeholder="crédito">
+        </label>
+        <label>Cómo le dices a cada parte (varias, con coma)
+          <input name="parte" autocomplete="off" maxlength="60" placeholder="usuario, cuenta, perfil">
+        </label>
+      </div>
+      <label>Stock inicial (con cuántos enteros empezaste)
+        <input name="inicial" type="number" inputmode="decimal" min="0" step="any">
       </label>
       <label>Avisar cuando queden (stock bajo)
-        <input name="minimo" type="number" inputmode="numeric" min="0" step="1">
+        <input name="minimo" type="number" inputmode="decimal" min="0" step="any">
       </label>
       <p class="nota">Al cambiar el stock inicial, lo que queda sube o baja lo mismo.</p>
       <div class="editor-botones">
@@ -328,6 +339,9 @@
       </fieldset>
       <label>Cantidad
         <input name="cantidad" type="number" inputmode="numeric" min="1" step="1">
+      </label>
+      <label id="inv-mov-en">En
+        <select name="en"></select>
       </label>
       <label>Fecha
         <input name="fecha" type="date">
