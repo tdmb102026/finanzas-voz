@@ -318,6 +318,31 @@
     </form>
   </dialog>
 
+  <dialog id="inv-mov">
+    <form method="dialog" id="inv-mov-form">
+      <h2 id="inv-mov-titulo"></h2>
+      <p id="inv-mov-nota" class="nota"></p>
+      <fieldset class="sentido">
+        <label><input type="radio" name="tipo" value="compra"><span>📥 Agregar<small>entran</small></span></label>
+        <label><input type="radio" name="tipo" value="venta"><span>📤 Retirar<small>salen</small></span></label>
+      </fieldset>
+      <label>Cantidad
+        <input name="cantidad" type="number" inputmode="numeric" min="1" step="1">
+      </label>
+      <label>Fecha
+        <input name="fecha" type="date">
+      </label>
+      <label>Nota
+        <input name="nota" autocomplete="off" maxlength="80" placeholder="Por ejemplo llegó pedido de China">
+      </label>
+      <div class="editor-botones">
+        <button value="borrar" id="inv-mov-borrar" class="peligro" formnovalidate>Borrar</button>
+        <button value="cancelar" formnovalidate>Cancelar</button>
+        <button value="guardar" class="principal">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="inv-confirmar">
     <form method="dialog">
       <h2 id="inv-confirmar-titulo"></h2>

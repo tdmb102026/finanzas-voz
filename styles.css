@@ -749,3 +749,6 @@ body.mes-pasado .mes-mini h1 { color: var(--acento); }
 .curva-leyenda li { display: flex; align-items: center; gap: 8px; font-size: 14px; }
 .curva-leyenda i { width: 14px; height: 4px; border-radius: 2px; flex-shrink: 0; }
 .curva-leyenda b { margin-left: auto; font-weight: 600; font-variant-numeric: tabular-nums; }
+.hist-agregar { display: flex; gap: 8px; margin: 4px 0 0; }
+.modal .hist-agregar button { margin: 0; flex: 1; padding: 10px; background: var(--fondo); color: var(--texto); border: 1px solid var(--borde); }
+.hist-editar { font-size: 16px; }
