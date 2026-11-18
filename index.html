@@ -125,9 +125,14 @@
       </section>
 
       <section class="tarjeta">
-        <h2>Descargar a Excel</h2>
-        <p class="nota arriba">Todos tus movimientos, personales y de negocios, con las columnas de tu Excel.</p>
-        <button type="button" id="exportar" class="boton-ancho">Descargar Excel</button>
+        <h2>Respaldo</h2>
+        <p class="nota arriba">El Excel trae tus movimientos, el inventario y una hoja «Respaldo» con todo lo de la app. Con «Importar» cargas ese Excel aquí o en otro celular.</p>
+        <div class="respaldo-botones">
+          <button type="button" id="exportar">⬇️ Excel</button>
+          <button type="button" id="importar">⬆️ Importar</button>
+          <button type="button" id="foto-resumen">🖼️ Imagen</button>
+        </div>
+        <input type="file" id="respaldo-archivo" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
       </section>
 
       <section class="tarjeta">
@@ -460,6 +465,17 @@
     </form>
   </dialog>
 
+  <dialog id="respaldo-confirmar">
+    <form method="dialog">
+      <h2>¿Cargar este respaldo?</h2>
+      <p id="respaldo-texto" class="nota"></p>
+      <div class="editor-botones">
+        <button value="no" formnovalidate>Cancelar</button>
+        <button value="si" class="principal">Cargar</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="confirmar-reinicio">
     <form method="dialog">
       <h2>¿Borrar todos los movimientos?</h2>
@@ -473,6 +489,7 @@
 
   <script src="db.js"></script>
   <script src="excel.js"></script>
+  <script src="respaldo.js"></script>
   <script src="graficos.js"></script>
   <script src="app.js"></script>
   <script src="cuentas.js"></script>

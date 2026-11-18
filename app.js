@@ -1,6 +1,6 @@
 // Anotar con teclado, resumen y presupuesto como el Excel de fer.
 // Montos siempre en centavos de dólar.
-const APP_VERSION = 'v42';
+const APP_VERSION = 'v43';
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
   'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
@@ -891,20 +891,9 @@ async function exportar() {
     cat, con, ppto / 100, monto / 100, nota, neg ? (negocioPorId(neg) || { nombre: 'Negocio borrado' }).nombre : 'Personal',
   ]);
   const encabezado = ['Fecha', 'Mes', 'Tipo', 'Categoria', 'Concepto', 'Presupuesto', 'Monto', 'Nota', 'Negocio'];
-  const blob = Excel.libro('Movimientos', [encabezado, ...datos]);
-  const nombre = `finanzas-${fechaLocal().slice(0, 10)}.xlsx`;
-  // En la app Android no hay descargas del navegador: el archivo se guarda en Descargas desde Java.
-  if (window.AndroidVoz) {
-    const lector = new FileReader();
-    lector.onload = () => AndroidVoz.guardar(lector.result.split(',')[1], nombre, blob.type);
-    lector.readAsDataURL(blob);
-    return;
-  }
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = nombre;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  // Además de Movimientos, el libro trae Inventario y la hoja Respaldo (para Importar respaldo).
+  const blob = Excel.libroVarias([{ nombre: 'Movimientos', filas: [encabezado, ...datos] }, ...await Respaldo.hojas()]);
+  Respaldo.guardarArchivo(blob, `MIG-respaldo-${fechaLocal().slice(0, 10)}.xlsx`);
 }
 
 // ---------- Editor de movimientos ----------
@@ -1221,6 +1210,13 @@ $('concepto-form').addEventListener('submit', async e => {
 });
 
 $('exportar').addEventListener('click', exportar);
+$('importar').addEventListener('click', () => $('respaldo-archivo').click());
+$('respaldo-archivo').addEventListener('change', e => {
+  const f = e.target.files[0];
+  e.target.value = '';
+  if (f) Respaldo.importar(f);
+});
+$('foto-resumen').addEventListener('click', () => Respaldo.imagen());
 
 // ---------- Deslizar a los lados ----------
 // Deslizar el dedo a la izquierda o derecha cambia entre Personal y los negocios (da la vuelta).

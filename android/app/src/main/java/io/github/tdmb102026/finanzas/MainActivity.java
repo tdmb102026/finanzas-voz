@@ -17,6 +17,8 @@ import android.speech.RecognizerIntent;
 import android.util.Base64;
 import android.view.WindowInsets;
 import android.webkit.JavascriptInterface;
+import android.webkit.ValueCallback;
+import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -35,6 +37,8 @@ public class MainActivity extends Activity {
     static final String URL = "https://tdmb102026.github.io/finanzas-voz/";
     static final String VOZ = "io.github.tdmb102026.finanzas.VOZ";
     private static final int PEDIR_VOZ = 1;
+    private static final int PEDIR_ARCHIVO = 2;
+    private ValueCallback<Uri[]> archivoPedido;
 
     private WebView web;
     private boolean cargada = false;
@@ -68,6 +72,22 @@ public class MainActivity extends Activity {
                     vozPendiente = false;
                     escucharEnPagina();
                 }
+            }
+        });
+        // "Importar respaldo": el WebView no abre el selector de archivos solo; aquí se abre el de Android.
+        web.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams params) {
+                if (archivoPedido != null) archivoPedido.onReceiveValue(null);
+                archivoPedido = cb;
+                Intent i = new Intent(Intent.ACTION_GET_CONTENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*");
+                try {
+                    startActivityForResult(Intent.createChooser(i, "Elige el Excel de respaldo"), PEDIR_ARCHIVO);
+                } catch (ActivityNotFoundException e) {
+                    archivoPedido = null;
+                    return false;
+                }
+                return true;
             }
         });
         // El WebView va dentro de un marco: Android 15 dibuja la app debajo de la barra de la hora
@@ -116,6 +136,13 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int pedido, int resultado, Intent datos) {
         super.onActivityResult(pedido, resultado, datos);
+        if (pedido == PEDIR_ARCHIVO) {
+            if (archivoPedido == null) return;
+            Uri u = resultado == RESULT_OK && datos != null ? datos.getData() : null;
+            archivoPedido.onReceiveValue(u == null ? null : new Uri[] { u });
+            archivoPedido = null;
+            return;
+        }
         if (pedido != PEDIR_VOZ || resultado != RESULT_OK || datos == null) return;
         ArrayList<String> textos = datos.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
         if (textos == null || textos.isEmpty()) return;
