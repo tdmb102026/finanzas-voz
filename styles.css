@@ -79,7 +79,8 @@ main {
   margin: 0 auto;
 }
 .vista { display: none; height: 100%; padding: 12px 16px 8px; }
-.vista.activa { display: flex; flex-direction: column; }
+.vista.activa { display: flex; flex-direction: column; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.vista.activa > * { flex-shrink: 0; }
 
 /* ---------- Anotar ---------- */
 .tipo {
@@ -122,8 +123,6 @@ body[data-tipo="inversion"] .monto { color: var(--inversion); }
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
   margin-top: 12px;
-  max-height: 34vh;
-  overflow-y: auto;
 }
 .cat {
   border: 1px solid var(--borde);
@@ -666,7 +665,12 @@ body.mes-pasado .mes-mini h1 { color: var(--acento); }
 .inv-barra { height: 8px; border-radius: 4px; background: var(--fondo); overflow: hidden; margin: 2px 0 8px; }
 .inv-barra i { display: block; height: 100%; background: var(--ingreso); border-radius: 4px; }
 .inv-barra.baja i { background: #ff9800; }
-.inv-flecha { float: right; font-size: 18px; line-height: 1; transition: transform .2s; }
+.inv-flecha { font-size: 18px; line-height: 1; color: var(--suave); transition: transform .2s; }
+.inv-pie { display: flex; align-items: center; gap: 10px; }
+.inv-pie .inventario-vendidas { flex: 1; }
+.inv-paso { display: flex; gap: 6px; }
+.inv-uno { width: 44px; height: 38px; border: 1px solid var(--borde); border-radius: 10px; background: var(--fondo); color: var(--texto); font-size: 22px; font-weight: 600; line-height: 1; padding: 0; }
+.inv-uno:active { background: var(--acento); color: var(--sobre-acento); }
 .inventario-card[open] .inv-flecha { transform: rotate(90deg); }
 .inventario-card > summary .inventario-vendidas { margin: 0; }
 .inv-detalle { border-top: 1px solid var(--borde); margin-top: 10px; padding-top: 10px; }

@@ -144,7 +144,14 @@ const Inventario = (() => {
             <span class="inventario-stock${alerta ? ' stock-bajo' : ''}"><strong>${item.stockActual}</strong> de ${tope}</span>
           </div>
           <div class="inv-barra${alerta ? ' baja' : ''}"><i style="width:${pct}%"></i></div>
-          <p class="inventario-vendidas">Vendidas este mes: ${vendidas(item)} · <b class="inv-plata">${dinero(pl.ventasMes - pl.gastosMes)}</b>${alerta ? ' · ⚠️ stock bajo' : ''}<span class="inv-flecha">›</span></p>
+          <div class="inv-pie">
+            <p class="inventario-vendidas">Vendidas este mes: ${vendidas(item)} · <b class="inv-plata">${dinero(pl.ventasMes - pl.gastosMes)}</b>${alerta ? '<br>⚠️ stock bajo' : ''}</p>
+            <span class="inv-paso">
+              <button type="button" class="inv-uno" data-id="${escapar(item.id)}" data-tipo="venta" aria-label="Sacar uno">−</button>
+              <button type="button" class="inv-uno" data-id="${escapar(item.id)}" data-tipo="compra" aria-label="Agregar uno">+</button>
+            </span>
+            <span class="inv-flecha">›</span>
+          </div>
         </summary>
         <div class="inv-detalle">
           <div class="inv-datos">
@@ -167,8 +174,8 @@ const Inventario = (() => {
               <small>${escapar(h.nota || '')}</small><small>${escapar(String(h.fecha).slice(5).split('-').reverse().join('/'))}</small></li>`).join('')}</ul>`
             : '<p class="nota">Todavía sin movimientos.</p>'}
           <div class="inventario-acciones">
-            <button type="button" class="inv-menos" data-id="${escapar(item.id)}">− Salida</button>
-            <button type="button" class="inv-mas" data-id="${escapar(item.id)}">+ Entrada</button>
+            <button type="button" class="inv-menos" data-id="${escapar(item.id)}">− Sacar varias</button>
+            <button type="button" class="inv-mas" data-id="${escapar(item.id)}">+ Agregar varias</button>
             <button type="button" class="inv-hist" data-id="${escapar(item.id)}">Todo</button>
           </div>
         </div>
@@ -177,6 +184,12 @@ const Inventario = (() => {
     });
 
     // Event listeners
+    // − / + de la tarjeta: de a uno, sin abrirla (están dentro del summary).
+    $div.querySelectorAll('.inv-uno').forEach(b => b.addEventListener('click', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      deAUno(b.dataset.id, b.dataset.tipo);
+    }));
     $div.querySelectorAll('.inv-menos').forEach(b => b.addEventListener('click', () => restarStock(b.dataset.id)));
     $div.querySelectorAll('.inv-mas').forEach(b => b.addEventListener('click', () => sumarStock(b.dataset.id)));
     $div.querySelectorAll('.inv-hist').forEach(b => b.addEventListener('click', () => {
@@ -201,6 +214,32 @@ const Inventario = (() => {
       if (d.returnValue !== 'guardar') return listo(null);
       listo({ nombre: f.nombre.value.trim(), cantidad: parseInt(f.cantidad.value, 10) });
     }, { once: true }));
+  }
+
+  function deAUno(id, tipo) {
+    const r = cola.then(async () => {
+      const item = await registrarMovimiento(id, tipo, 1, tipo === 'venta' ? 'Salida manual' : 'Entrada manual');
+      if (!item) return;
+      vibrar(10);
+      avisar(`${item.nombre}: ${tipo === 'venta' ? '−1' : '+1'} → quedan ${item.stockActual}`, () => deshacerUno(id));
+      if (tipo === 'venta' && item.stockActual === item.stockMinimo) avisar(`⚠️ Stock bajo: quedan ${item.stockActual} de ${item.nombre}`, () => deshacerUno(id), 5000);
+      repintar();
+    });
+    cola = r.catch(() => {});
+  }
+
+  function deshacerUno(id) {
+    const r = cola.then(async () => {
+      const item = (await DB.inventario()).find(i => i.id === id);
+      const h = item && item.historial[item.historial.length - 1];
+      if (!h || h.mov || h.cantidad !== 1) return;
+      item.historial.pop();
+      item.stockActual += h.tipo === 'venta' ? 1 : -1;
+      await DB.guardarInventario(item);
+      repintar();
+    });
+    cola = r.catch(() => {});
+    return r;
   }
 
   async function restarStock(id) {

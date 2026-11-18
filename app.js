@@ -1,6 +1,6 @@
 // Anotar con teclado, resumen y presupuesto como el Excel de fer.
 // Montos siempre en centavos de dólar.
-const APP_VERSION = 'v35';
+const APP_VERSION = 'v36';
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
   'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
