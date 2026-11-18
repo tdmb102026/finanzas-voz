@@ -75,10 +75,12 @@ const Inventario = (() => {
     // Plata por producto: ventas menos gastos (envíos, etc.) que nombran el producto. Un combo se reparte por unidades.
     const plata = {};
     for (const x of items) plata[x.id] = { ventas: 0, gastos: 0, ventasMes: 0, gastosMes: 0 };
-    for (const m of await DB.todos()) {
+    const todosMovs = await DB.todos();
+    const porFrase = ventasPorFrase(todosMovs.filter(m => (m.negocio || '') === negocio));
+    for (const m of todosMovs) {
       if ((m.negocio || '') !== negocio || m.estado === 'pendiente' || (m.tipo !== 'ingreso' && m.tipo !== 'gasto')) continue;
       const dia = String(m.fecha).slice(0, 10);
-      const ps = productosDe(m, items).filter(p => dia >= (p.item.desde || DESDE_ANTIGUO) && !ignorado(p.item, m.id));
+      const ps = productosDe(m, items, (porFrase[m.frase] || 0) <= 1).filter(p => dia >= (p.item.desde || DESDE_ANTIGUO) && !ignorado(p.item, m.id));
       const unidades = ps.reduce((a, p) => a + p.cantidad, 0);
       for (const p of ps) {
         const parte = Math.round((m.monto || 0) * p.cantidad / unidades);
@@ -531,16 +533,38 @@ const Inventario = (() => {
   }
 
   // Lo que salió en una venta: [{ item, cantidad }] (vacío si no nombra productos).
-  function productosDe(m, items) {
+  // Todos los productos que nombra un texto: "una excavadora y una volqueta" = 1 y 1.
+  function nombrados(texto, items) {
+    const t = plano(texto);
+    return items.filter(x => t.includes(raiz(x))).map(item => ({ item, cantidad: cantidadEn(texto, item) }));
+  }
+
+  // Lo que salió en una venta: [{ item, cantidad }] (vacío si no nombra productos).
+  // La nota es de esta venta; la frase entera solo se mira si de ella salió una sola venta
+  // (si la IA la partió en varias, cada una ya trae su producto en la nota).
+  function productosDe(m, items, sola = true) {
     for (const texto of [m.nota, m.frase]) {
       const delCombo = combosEn(texto, items, m.negocio || '');
       if (delCombo) return delCombo;
-      const t = plano(texto);
-      const item = items.find(x => t.includes(raiz(x)));
-      if (item) return [{ item, cantidad: cantidadEn(texto, item) }];
     }
-    return [];
+    const deNota = nombrados(m.nota, items);
+    if (deNota.length && !sola) return deNota;
+    const deFrase = sola || !deNota.length ? nombrados(m.frase, items) : [];
+    const todos = new Map();
+    for (const p of [...deNota, ...deFrase]) {
+      const ya = todos.get(p.item.id);
+      if (!ya || p.cantidad > ya.cantidad) todos.set(p.item.id, p);
+    }
+    return [...todos.values()];
   }
+
+  // Cuántas ventas salieron de cada frase.
+  function ventasPorFrase(movs) {
+    const n = {};
+    for (const m of movs) if (m.tipo === 'ingreso' && m.frase) n[m.frase] = (n[m.frase] || 0) + 1;
+    return n;
+  }
+
 
   // Cuadra el stock con las ventas del negocio: agrega las nuevas y devuelve las que se borraron o cambiaron.
   // Una sincronización a la vez, para no descontar dos veces la misma venta.
@@ -558,10 +582,12 @@ const Inventario = (() => {
     const conceptos = {};
     for (const c of await DB.conceptos()) conceptos[c.id] = c;
     const quiere = new Map();
-    for (const m of await DB.todos()) {
+    const todosMovs = await DB.todos();
+    const porFrase = ventasPorFrase(todosMovs.filter(m => (m.negocio || '') === negocio));
+    for (const m of todosMovs) {
       if ((m.negocio || '') !== negocio || m.estado === 'pendiente' || m.tipo !== 'ingreso') continue;
       if (String(m.fecha).slice(0, 10) < desdeMin) continue;
-      const ps = productosDe(m, items).filter(p => String(m.fecha).slice(0, 10) >= (p.item.desde || DESDE_ANTIGUO) && !ignorado(p.item, m.id));
+      const ps = productosDe(m, items, (porFrase[m.frase] || 0) <= 1).filter(p => String(m.fecha).slice(0, 10) >= (p.item.desde || DESDE_ANTIGUO) && !ignorado(p.item, m.id));
       if (ps.length) quiere.set(m.id, ps.map(p => ({ ...p, m })));
     }
     const bajos = [];
