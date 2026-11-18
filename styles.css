@@ -752,3 +752,5 @@ body.mes-pasado .mes-mini h1 { color: var(--acento); }
 .hist-agregar { display: flex; gap: 8px; margin: 4px 0 0; }
 .modal .hist-agregar button { margin: 0; flex: 1; padding: 10px; background: var(--fondo); color: var(--texto); border: 1px solid var(--borde); }
 .hist-editar { font-size: 16px; }
+.respaldo-botones { display: flex; gap: 8px; }
+.respaldo-botones button { flex: 1; padding: 9px 4px; font-size: 14px; font-weight: 600; border-radius: 10px; border: 1px solid var(--borde); background: var(--superficie); color: var(--texto); }

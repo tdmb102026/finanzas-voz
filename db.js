@@ -125,6 +125,10 @@ const DB = (() => {
   }
 
   return {
+    TABLAS: ['movimientos', 'conceptos', 'negocios', 'deudas', 'inventario'],
+    todosDe: tabla => operar(tabla, 'readonly', t => t.getAll()),
+    // Cambia toda una tabla por la lista (para Importar respaldo).
+    reemplazar: (tabla, lista) => operar(tabla, 'readwrite', t => { t.clear(); lista.forEach(x => t.put(x)); }),
     guardar: mov => operar('movimientos', 'readwrite', t => t.put(mov)),
     borrar: id => operar('movimientos', 'readwrite', t => t.delete(id)),
     // Movimientos con fecha en [desde, hasta), fechas ISO.

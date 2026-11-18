@@ -44,14 +44,15 @@ const Excel = (() => {
     + '<xf numFmtId="2" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs>'
     + '</styleSheet>';
 
-  function archivos(nombreHoja, filas) {
-    return {
+  // hojas: [{ nombre, filas }]
+  function archivos(hojas) {
+    const mapa = {
       '[Content_Types].xml': '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
         + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
         + '<Default Extension="xml" ContentType="application/xml"/>'
         + '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
-        + '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+        + hojas.map((_, k) => `<Override PartName="/xl/worksheets/sheet${k + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')
         + '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
         + '</Types>',
       '_rels/.rels': '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
@@ -60,15 +61,76 @@ const Excel = (() => {
         + '</Relationships>',
       'xl/workbook.xml': '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         + '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
-        + `<sheets><sheet name="${xml(nombreHoja)}" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+        + `<sheets>${hojas.map((h, k) => `<sheet name="${xml(h.nombre)}" sheetId="${k + 1}" r:id="rId${k + 1}"/>`).join('')}</sheets></workbook>`,
       'xl/_rels/workbook.xml.rels': '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-        + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
-        + '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+        + hojas.map((_, k) => `<Relationship Id="rId${k + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${k + 1}.xml"/>`).join('')
+        + `<Relationship Id="rId${hojas.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>`
         + '</Relationships>',
       'xl/styles.xml': ESTILOS,
-      'xl/worksheets/sheet1.xml': hoja(filas),
     };
+    hojas.forEach((h, k) => { mapa[`xl/worksheets/sheet${k + 1}.xml`] = hoja(h.filas); });
+    return mapa;
+  }
+
+  // ---------- Leer un .xlsx (para Importar respaldo) ----------
+  // Sirve con el archivo de la app y también si Excel lo volvió a guardar (comprimido).
+  async function descomprimir(datos) {
+    const s = new Blob([datos]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+    return new Uint8Array(await new Response(s).arrayBuffer());
+  }
+
+  async function abrirZip(buffer) {
+    const v = new DataView(buffer), u = new Uint8Array(buffer), dec = new TextDecoder();
+    let fin = -1;
+    for (let i = u.length - 22; i >= Math.max(0, u.length - 70000); i--) if (v.getUint32(i, true) === 0x06054b50) { fin = i; break; }
+    if (fin < 0) throw new Error('No es un archivo de Excel');
+    const total = v.getUint16(fin + 10, true);
+    let p = v.getUint32(fin + 16, true);
+    const mapa = {};
+    for (let k = 0; k < total; k++) {
+      const metodo = v.getUint16(p + 10, true), tam = v.getUint32(p + 20, true);
+      const nl = v.getUint16(p + 28, true), el = v.getUint16(p + 30, true), cl = v.getUint16(p + 32, true);
+      const local = v.getUint32(p + 42, true);
+      const nombre = dec.decode(u.subarray(p + 46, p + 46 + nl));
+      const ini = local + 30 + v.getUint16(local + 26, true) + v.getUint16(local + 28, true);
+      const crudo = u.subarray(ini, ini + tam);
+      mapa[nombre] = { metodo, crudo };
+      p += 46 + nl + el + cl;
+    }
+    return async nombre => {
+      const e = mapa[nombre];
+      if (!e) return null;
+      return dec.decode(e.metodo === 8 ? await descomprimir(e.crudo) : e.crudo);
+    };
+  }
+
+  // Columna A de la hoja con ese nombre, fila por fila (texto).
+  async function leerColumna(buffer, nombreHoja) {
+    const leer = await abrirZip(buffer);
+    const dom = t => new DOMParser().parseFromString(t, 'application/xml');
+    const libro = dom(await leer('xl/workbook.xml'));
+    const hojaEl = [...libro.getElementsByTagName('sheet')].find(h => h.getAttribute('name') === nombreHoja);
+    if (!hojaEl) return null;
+    const rid = hojaEl.getAttribute('r:id') || hojaEl.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id');
+    const rels = dom(await leer('xl/_rels/workbook.xml.rels'));
+    const rel = [...rels.getElementsByTagName('Relationship')].find(r => r.getAttribute('Id') === rid);
+    const destino = rel.getAttribute('Target').replace(/^\/?(xl\/)?/, '');
+    const hojaXml = dom(await leer('xl/' + destino));
+    const compartidos = await leer('xl/sharedStrings.xml');
+    const tabla = compartidos ? [...dom(compartidos).getElementsByTagName('si')].map(si => [...si.getElementsByTagName('t')].map(t => t.textContent).join('')) : [];
+    const col = [];
+    for (const c of hojaXml.getElementsByTagName('c')) {
+      const ref = c.getAttribute('r') || '';
+      if (!/^A\d+$/.test(ref)) continue;
+      const t = c.getAttribute('t');
+      let val = '';
+      if (t === 's') val = tabla[Number(c.getElementsByTagName('v')[0]?.textContent)] || '';
+      else if (t === 'inlineStr') val = [...c.getElementsByTagName('t')].map(x => x.textContent).join('');
+      else val = c.getElementsByTagName('v')[0]?.textContent || '';
+      col[Number(ref.slice(1)) - 1] = val;
+    }
+    return col;
   }
 
   // ---------- Zip sin compresión ----------
@@ -126,6 +188,8 @@ const Excel = (() => {
 
   return {
     // filas: arreglo de arreglos; cada valor es texto, número o { fecha: 'AAAA-MM-DD' }.
-    libro: (nombreHoja, filas) => zip(archivos(nombreHoja, filas)),
+    libro: (nombreHoja, filas) => zip(archivos([{ nombre: nombreHoja, filas }])),
+    libroVarias: hojas => zip(archivos(hojas)),
+    leerColumna,
   };
 })();
