@@ -107,7 +107,15 @@ const Inventario = (() => {
       items.forEach(x => (abrir ? abiertos.add(x.id) : abiertos.delete(x.id)));
       pintar(negocio, padre);
     });
-    $div.appendChild($todo);
+    const $fila = document.createElement('div');
+    $fila.className = 'inv-fila-arriba';
+    const $curva = document.createElement('button');
+    $curva.type = 'button';
+    $curva.className = 'inv-todo';
+    $curva.textContent = '📈 Ver todos en una curva';
+    $curva.addEventListener('click', () => abrirCurva(items));
+    $fila.append($curva, $todo);
+    $div.appendChild($fila);
 
     const hoy = new Date();
     const diaStr = d => fechaLocal(d).slice(0, 10);
@@ -355,6 +363,62 @@ const Inventario = (() => {
       avisar(`Agregadas ${q} unidades de ${item.nombre}`);
       repintar();
     }
+  }
+
+  // ---------- Curva de todos los productos ----------
+  const COLORES = ['#e8a33d', '#3fcf8e', '#5aa9e6', '#e86a5a', '#b48ee0', '#d9c84a', '#4fc1c1', '#f08cc0'];
+
+  function abrirCurva(items, modo = 'stock', $overlay) {
+    const hoy = new Date();
+    const dia = d => fechaLocal(d).slice(0, 10);
+    const inicio = items.reduce((a, x) => ((x.desde || DESDE_ANTIGUO) < a ? (x.desde || DESDE_ANTIGUO) : a), dia(hoy));
+    const dias = [];
+    for (let d = new Date(inicio + 'T12:00:00'); dia(d) <= dia(hoy); d.setDate(d.getDate() + 1)) dias.push(dia(d));
+    if (dias.length < 2) dias.unshift(dia(new Date(hoy.getTime() - 864e5)));
+    const series = items.map((item, k) => {
+      const valores = dias.map(f => {
+        if (modo === 'ventas') return item.historial.filter(h => h.tipo === 'venta' && h.fecha === f).reduce((a, h) => a + h.cantidad, 0);
+        return item.historial.filter(h => h.fecha <= f)
+          .reduce((a, h) => a + (h.tipo === 'compra' ? h.cantidad : -h.cantidad), item.stockInicial);
+      });
+      return { item, valores, color: COLORES[k % COLORES.length] };
+    });
+    const W = 340, H = 200, IZQ = 30, DER = 10, ARR = 10, ABA = 22;
+    const max = Math.max(1, ...series.flatMap(x => x.valores));
+    const tope = max <= 4 ? 4 : max <= 10 ? 10 : Math.ceil(max / 10) * 10;
+    const x = i => IZQ + i * (W - IZQ - DER) / (dias.length - 1);
+    const y = v => ARR + (1 - v / tope) * (H - ARR - ABA);
+    const guias = [0, tope / 2, tope].map(v => `<line x1="${IZQ}" x2="${W - DER}" y1="${y(v)}" y2="${y(v)}" class="curva-guia"/>
+      <text x="${IZQ - 4}" y="${y(v) + 3}" text-anchor="end" class="curva-eje">${Math.round(v)}</text>`).join('');
+    const fecha = f => f.slice(5).split('-').reverse().join('/');
+    const lineas = series.map(sr => `<polyline fill="none" stroke="${sr.color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"
+      points="${sr.valores.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ')}"/>
+      <circle cx="${x(dias.length - 1)}" cy="${y(sr.valores[sr.valores.length - 1])}" r="3.5" fill="${sr.color}"/>`).join('');
+    if (!$overlay) {
+      $overlay = document.createElement('div');
+      $overlay.className = 'modal-overlay';
+      $overlay.addEventListener('click', e => { if (e.target === $overlay) $overlay.remove(); });
+      document.body.appendChild($overlay);
+    }
+    $overlay.innerHTML = `
+      <div class="modal">
+        <h2>📈 Todos los productos</h2>
+        <div class="curva-modos">
+          <button type="button" data-modo="stock" class="${modo === 'stock' ? 'activo' : ''}">Stock</button>
+          <button type="button" data-modo="ventas" class="${modo === 'ventas' ? 'activo' : ''}">Vendidas por día</button>
+        </div>
+        <svg viewBox="0 0 ${W} ${H}" class="curva" role="img" aria-label="${modo === 'stock' ? 'Stock' : 'Vendidas'} de cada producto por día">
+          ${guias}${lineas}
+          <text x="${IZQ}" y="${H - 6}" class="curva-eje">${fecha(dias[0])}</text>
+          <text x="${W - DER}" y="${H - 6}" text-anchor="end" class="curva-eje">hoy</text>
+        </svg>
+        <ul class="curva-leyenda">${series.map(sr => `
+          <li><i style="background:${sr.color}"></i>${escapar(sr.item.nombre)}
+            <b>${modo === 'stock' ? `${sr.item.stockActual} quedan` : (n => `${n} vendida${n === 1 ? '' : 's'}`)(sr.valores.reduce((a, v) => a + v, 0))}</b></li>`).join('')}</ul>
+        <button type="button" class="hist-cerrar">Cerrar</button>
+      </div>`;
+    $overlay.querySelector('.hist-cerrar').addEventListener('click', () => $overlay.remove());
+    $overlay.querySelectorAll('[data-modo]').forEach(b => b.addEventListener('click', () => abrirCurva(items, b.dataset.modo, $overlay)));
   }
 
   const FUENTES = { voz: '🎙️ Venta anotada', venta: '🎙️ Venta anotada', manual: '✋ A mano' };
