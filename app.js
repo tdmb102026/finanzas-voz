@@ -1,6 +1,6 @@
 // Anotar con teclado, resumen y presupuesto como el Excel de fer.
 // Montos siempre en centavos de dólar.
-const APP_VERSION = 'v43';
+const APP_VERSION = 'v44';
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
   'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
@@ -1216,7 +1216,7 @@ $('respaldo-archivo').addEventListener('change', e => {
   e.target.value = '';
   if (f) Respaldo.importar(f);
 });
-$('foto-resumen').addEventListener('click', () => Respaldo.imagen());
+$('foto-resumen').addEventListener('click', () => Respaldo.imagen(estado.espacio));
 
 // ---------- Deslizar a los lados ----------
 // Deslizar el dedo a la izquierda o derecha cambia entre Personal y los negocios (da la vuelta).
