@@ -298,6 +298,36 @@
     </form>
   </dialog>
 
+  <dialog id="inv-confirmar">
+    <form method="dialog">
+      <h2 id="inv-confirmar-titulo"></h2>
+      <p id="inv-confirmar-nota" class="nota"></p>
+      <div class="editor-botones">
+        <button value="no">Cancelar</button>
+        <button value="si" id="inv-confirmar-si" class="peligro"></button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="combo-dialogo">
+    <form method="dialog" id="combo-form">
+      <h2 id="combo-titulo"></h2>
+      <label>Nombre del combo
+        <input name="nombre" autocomplete="off" maxlength="40" placeholder="Por ejemplo Combo obra">
+      </label>
+      <label>Cómo lo dices (frases separadas por coma)
+        <input name="frases" autocomplete="off" maxlength="120" placeholder="Por ejemplo el combo grande, los cuatro carritos">
+      </label>
+      <p class="nota">Qué lleva:</p>
+      <div id="combo-partes"></div>
+      <div class="editor-botones">
+        <button value="borrar" id="combo-borrar" class="peligro" formnovalidate>Borrar</button>
+        <button value="cancelar" formnovalidate>Cancelar</button>
+        <button value="guardar" class="principal">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="editor-deuda">
     <form method="dialog" id="deuda-form">
       <h2 id="deuda-titulo">Deuda o préstamo</h2>

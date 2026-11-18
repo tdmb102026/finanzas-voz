@@ -694,6 +694,15 @@ body.mes-pasado .mes-mini h1 { color: var(--acento); }
 .inv-ganancia span { display: flex; justify-content: space-between; gap: 6px; }
 .inv-ganancia .neto { border-top: 1px solid var(--borde); padding-top: 3px; margin-top: 2px; font-weight: 600; }
 .inv-ganancia .neto b { color: var(--ingreso); }
+.inv-borrar { display: block; margin: 12px auto 0; border: 0; background: none; color: var(--critico, #d9534f); font-size: 13px; font-weight: 600; padding: 6px; }
+.inv-combos { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+.inv-combos h2 { margin: 0; font-size: 18px; }
+.inv-combos .nota { margin: 0; }
+.inv-combo { text-align: left; background: var(--superficie); border: 1px solid var(--borde); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; color: var(--texto); }
+.inv-combo small { color: var(--suave); font-size: 12.5px; }
+.inv-nuevo-combo { border: 1.5px dashed var(--acento); background: none; color: var(--acento); border-radius: 12px; padding: 10px; font-weight: 600; }
+.combo-parte { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 6px 0; }
+.combo-parte input { width: 52px; text-align: center; padding: 6px 2px; }
 .inv-todo { justify-self: end; align-self: flex-end; border: 0; background: none; color: var(--acento); font-weight: 600; font-size: 13px; padding: 2px 4px; }
 .inventario-card.alerta { border-color: #ff9800; background: rgba(255, 152, 0, 0.05); }
 .inventario-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }

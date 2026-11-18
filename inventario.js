@@ -178,12 +178,32 @@ const Inventario = (() => {
             <button type="button" class="inv-mas" data-id="${escapar(item.id)}">+ Agregar varias</button>
             <button type="button" class="inv-hist" data-id="${escapar(item.id)}">Todo</button>
           </div>
+          <button type="button" class="inv-borrar" data-id="${escapar(item.id)}">🗑️ Borrar producto</button>
         </div>
       `;
       $div.appendChild($card);
     });
 
     // Event listeners
+    // Combos del negocio, debajo de los productos.
+    const lista = combos(negocio);
+    const $combos = document.createElement('section');
+    $combos.className = 'inv-combos';
+    $combos.innerHTML = `
+      <h2>🎁 Combos</h2>
+      <p class="nota">Arma un combo con los productos que lleva y cómo lo dices. Al venderlo (por voz o con su botón en Anotar → Venta) se descuenta cada producto.</p>
+      ${lista.map(c => `
+        <button type="button" class="inv-combo" data-combo="${escapar(c.id)}">
+          <strong>${escapar(c.nombre)}</strong>
+          <small>${items.filter(i => c.partes[i.id] > 0).map(i => `${c.partes[i.id]} ${escapar(i.nombre)}`).join(' + ') || 'sin productos'}</small>
+          ${c.frases ? `<small>🎙️ «${escapar(c.frases)}»</small>` : ''}
+        </button>`).join('')}
+      <button type="button" class="inv-nuevo-combo">+ Nuevo combo</button>`;
+    $div.appendChild($combos);
+    $combos.querySelectorAll('[data-combo]').forEach(b => b.addEventListener('click', () => editarCombo(negocio, items, lista.find(c => c.id === b.dataset.combo))));
+    $combos.querySelector('.inv-nuevo-combo').addEventListener('click', () => editarCombo(negocio, items, null));
+    $div.querySelectorAll('.inv-borrar').forEach(b => b.addEventListener('click', () => borrarProducto(items.find(i => i.id === b.dataset.id))));
+
     // − / + de la tarjeta: de a uno, sin abrirla (están dentro del summary).
     $div.querySelectorAll('.inv-uno').forEach(b => b.addEventListener('click', e => {
       e.preventDefault();
@@ -214,6 +234,63 @@ const Inventario = (() => {
       if (d.returnValue !== 'guardar') return listo(null);
       listo({ nombre: f.nombre.value.trim(), cantidad: parseInt(f.cantidad.value, 10) });
     }, { once: true }));
+  }
+
+  function confirmar(titulo, nota, boton) {
+    const d = $('inv-confirmar');
+    $('inv-confirmar-titulo').textContent = titulo;
+    $('inv-confirmar-nota').textContent = nota;
+    $('inv-confirmar-si').textContent = boton;
+    d.showModal();
+    return new Promise(listo => d.addEventListener('close', () => listo(d.returnValue === 'si'), { once: true }));
+  }
+
+  async function borrarProducto(item) {
+    if (!item) return;
+    const ok = await confirmar(`¿Borrar ${item.nombre}?`, `Se quita del inventario con su historial (${item.stockActual} unidades). Tus ventas anotadas no se borran.`, 'Borrar');
+    if (!ok) return;
+    await DB.borrarInventario(item.id);
+    abiertos.delete(item.id);
+    repintar();
+    avisar(`Borrado: ${item.nombre}`, async () => { await DB.guardarInventario(item); repintar(); }, 6000);
+  }
+
+  function editarCombo(negocio, items, combo) {
+    const d = $('combo-dialogo'), f = $('combo-form');
+    $('combo-titulo').textContent = combo ? 'Editar combo' : 'Nuevo combo';
+    f.nombre.value = combo ? combo.nombre : `Combo ${combos(negocio).length + 1}`;
+    f.frases.value = combo ? combo.frases || '' : '';
+    $('combo-partes').innerHTML = items.map(i => `
+      <label class="combo-parte"><span>${escapar(i.nombre)}</span>
+        <span class="inv-paso">
+          <button type="button" class="inv-uno" data-paso="-1">−</button>
+          <input name="p-${escapar(i.id)}" type="number" inputmode="numeric" min="0" step="1" value="${combo ? combo.partes[i.id] || 0 : 1}">
+          <button type="button" class="inv-uno" data-paso="1">+</button>
+        </span>
+      </label>`).join('');
+    $('combo-partes').onclick = e => {
+      const b = e.target.closest('[data-paso]');
+      if (!b) return;
+      const inp = b.parentElement.querySelector('input');
+      inp.value = Math.max(0, (parseInt(inp.value, 10) || 0) + Number(b.dataset.paso));
+    };
+    $('combo-borrar').hidden = !combo;
+    d.showModal();
+    d.addEventListener('close', () => {
+      let lista = combos(negocio);
+      if (d.returnValue === 'borrar' && combo) {
+        guardarCombos(negocio, lista.filter(c => c.id !== combo.id));
+        avisar(`Borrado: ${combo.nombre}`, () => { guardarCombos(negocio, [...combos(negocio), combo]); repintar(); }, 6000);
+      } else if (d.returnValue === 'guardar') {
+        const partes = {};
+        for (const i of items) { const n = parseInt(f['p-' + i.id].value, 10) || 0; if (n > 0) partes[i.id] = n; }
+        const nuevo = { id: combo ? combo.id : 'c' + Date.now().toString(36), nombre: f.nombre.value.trim() || 'Combo', frases: f.frases.value.trim(), partes };
+        lista = combo ? lista.map(c => (c.id === combo.id ? nuevo : c)) : [...lista, nuevo];
+        guardarCombos(negocio, lista);
+        avisar(`Guardado: ${nuevo.nombre}`);
+      }
+      repintar();
+    }, { once: true });
   }
 
   function deAUno(id, tipo) {
@@ -332,26 +409,18 @@ const Inventario = (() => {
   }
 
   async function inicializarImportCap(negocioId) {
-    const existentes = await porNegocio(negocioId);
-    console.log(`[Inventario.inicializarImportCap] negocioId=${negocioId}, existentes=${existentes.length}`);
-    if (existentes.length > 0) {
-      console.log(`[Inventario.inicializarImportCap] Ya existen productos, no se crean`);
-      return;
-    }
-
+    // Solo la primera vez: si fer borra los productos, no vuelven a aparecer.
+    const marca = 'inv-iniciado-' + negocioId;
+    if (localStorage.getItem(marca)) return;
+    localStorage.setItem(marca, '1');
+    if ((await porNegocio(negocioId)).length) return;
     const productos = [
       { nombre: 'Excavadora RC', stock: 100 },
       { nombre: 'Volqueta RC', stock: 48 },
       { nombre: 'Bulldozer RC', stock: 24 },
       { nombre: 'Tractor RC', stock: 24 },
     ];
-
-    console.log(`[Inventario.inicializarImportCap] Creando ${productos.length} productos...`);
-    for (const p of productos) {
-      await crear(negocioId, p.nombre, p.stock);
-      console.log(`[Inventario.inicializarImportCap] Creado: ${p.nombre}`);
-    }
-    console.log(`[Inventario.inicializarImportCap] Todos los productos creados`);
+    for (const p of productos) await crear(negocioId, p.nombre, p.stock);
   }
 
   // ---------- Ventas anotadas (por voz o con frase) descuentan stock solas ----------
@@ -378,18 +447,47 @@ const Inventario = (() => {
     return numeroAntes(palabras, palabras.findIndex((w, k) => plano(w).startsWith(r) || plano(w + (palabras[k + 1] || '')).startsWith(r)));
   }
 
-  // Un combo es uno de cada producto del negocio: "vendí dos combos" saca 2 de cada uno.
-  function esCombo(texto) {
-    const palabras = palabrasDe(texto);
+  // ---------- Combos ----------
+  // Cada negocio guarda sus combos en el teléfono: [{ id, nombre, partes: { idProducto: cantidad } }].
+  const claveCombos = negocio => 'inv-combos-' + negocio;
+  function combos(negocio) {
+    try { return JSON.parse(localStorage.getItem(claveCombos(negocio)) || '[]'); } catch { return []; }
+  }
+  function guardarCombos(negocio, lista) {
+    localStorage.setItem(claveCombos(negocio), JSON.stringify(lista));
+  }
+  // Lo que se dice del combo: el nombre entero, o sin la palabra "combo" ("combo obra" → "obra").
+  function formasCombo(c) {
+    const sin = c.nombre.replace(/\b(combo|combos|pack|kit)\b/gi, '').trim();
+    const frases = String(c.frases || '').split(/[,;\n]+/).map(plano);
+    return [plano(c.nombre), plano(sin), ...frases].filter(f => f.length >= 3);
+  }
+
+  // Un combo dicho en la frase: los combos guardados por su nombre; "combo" a secas es el único guardado
+  // o, si no hay ninguno (o hay varios), uno de cada producto. "Dos combos obra" = 2 veces el combo.
+  function combosEn(texto, items, negocio) {
+    const t = plano(texto), palabras = palabrasDe(texto);
+    const guardados = combos(negocio).filter(c => Object.values(c.partes || {}).some(n => n > 0));
+    const partesDe = (c, veces) => items.filter(i => c.partes[i.id] > 0).map(item => ({ item, cantidad: c.partes[item.id] * veces }));
+    for (const c of guardados) {
+      if (!formasCombo(c).some(f => t.includes(f))) continue;
+      const primera = palabrasDe(c.nombre).filter(Boolean)[0];
+      let i = palabras.findIndex(w => w === primera || w === primera + 's');
+      if (i < 0) i = palabras.findIndex(w => w === 'combo' || w === 'combos');
+      return partesDe(c, i < 0 ? 1 : numeroAntes(palabras, i));
+    }
     const i = palabras.findIndex(w => w === 'combo' || w === 'combos');
-    return i < 0 ? 0 : numeroAntes(palabras, i);
+    if (i < 0) return null;
+    const veces = numeroAntes(palabras, i);
+    if (guardados.length === 1) return partesDe(guardados[0], veces);
+    return items.map(item => ({ item, cantidad: veces }));
   }
 
   // Lo que salió en una venta: [{ item, cantidad }] (vacío si no nombra productos).
   function productosDe(m, items) {
     for (const texto of [m.nota, m.frase]) {
-      const combos = esCombo(texto);
-      if (combos) return items.map(item => ({ item, cantidad: combos }));
+      const delCombo = combosEn(texto, items, m.negocio || '');
+      if (delCombo) return delCombo;
       const t = plano(texto);
       const item = items.find(x => t.includes(raiz(x)));
       if (item) return [{ item, cantidad: cantidadEn(texto, item) }];
@@ -460,6 +558,7 @@ const Inventario = (() => {
     agregarProducto,
     inicializarImportCap,
     sincronizar,
+    combos,
     avisarBajos,
   };
 })();
