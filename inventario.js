@@ -3,6 +3,8 @@
 
 const Inventario = (() => {
   const STOCK_MINIMO_DEFAULT = 10;
+  // Cada línea del historial tiene su id (`hid`) para poder editarla o borrarla.
+  const nuevoHid = () => 'h' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   // Ventas que fer quitó del historial: ya no descuentan ese producto.
   const ignorado = (item, movId) => (item.ignorados || []).includes(movId);
   // Tarjetas abiertas: siguen abiertas al repintar.
@@ -40,7 +42,7 @@ const Inventario = (() => {
 
     const ahora = new Date();
     const fecha = fechaLocal(ahora).slice(0, 10);
-    const entrada = { fecha, tipo, cantidad, nota, fuente };
+    const entrada = { hid: nuevoHid(), fecha, tipo, cantidad, nota, fuente };
     item.historial.push(entrada);
 
     // Actualizar stock
@@ -335,34 +337,54 @@ const Inventario = (() => {
     return r;
   }
 
-  async function restarStock(id) {
-    const items = await DB.inventario();
-    const item = items.find(i => i.id === id);
-    if (!item) return;
-    const r = await pedir({ titulo: `Vender ${item.nombre}`, nota: `Hay ${item.stockActual} unidades.`, textoCantidad: '¿Cuántas salen?', cantidad: 1 });
-    if (!r) return;
-    const q = r.cantidad;
-    if (q > 0) {
-      await registrarMovimiento(id, 'venta', q, `Venta manual`);
-      avisar(`Vendidas ${q} unidades de ${item.nombre}`);
-      const nuevoStock = item.stockActual - q;
-      if (nuevoStock <= item.stockMinimo) avisar(`⚠️ Stock bajo: quedan ${nuevoStock}`, null, 5000);
-      repintar();
-    }
-  }
+  const restarStock = id => abrirMov(id, { tipo: 'venta' });
+  const sumarStock = id => abrirMov(id, { tipo: 'compra' });
 
-  async function sumarStock(id) {
-    const items = await DB.inventario();
-    const item = items.find(i => i.id === id);
-    if (!item) return;
-    const r = await pedir({ titulo: `Agregar ${item.nombre}`, nota: `Hay ${item.stockActual} unidades.`, textoCantidad: '¿Cuántas entran?', cantidad: 1 });
-    if (!r) return;
-    const q = r.cantidad;
-    if (q > 0) {
-      await registrarMovimiento(id, 'compra', q, `Compra manual`);
-      avisar(`Agregadas ${q} unidades de ${item.nombre}`);
-      repintar();
-    }
+  // Agregar, retirar o editar una línea del historial, con la fecha que fer quiera.
+  async function abrirMov(id, { tipo, h } = {}) {
+    const d = $('inv-mov'), f = $('inv-mov-form');
+    const item = (await DB.inventario()).find(i => i.id === id);
+    if (!item) return false;
+    const hoy = fechaLocal().slice(0, 10);
+    $('inv-mov-titulo').textContent = `${h ? 'Editar' : tipo === 'compra' ? 'Agregar' : 'Retirar'} · ${item.nombre}`;
+    f.tipo.value = h ? h.tipo : tipo;
+    f.querySelectorAll('[name=tipo]').forEach(r => { r.disabled = !!(h && h.mov); });
+    f.cantidad.value = h ? h.cantidad : 1;
+    f.fecha.value = h ? h.fecha : hoy;
+    f.fecha.max = hoy;
+    f.nota.value = h ? (h.nota || '') : '';
+    $('inv-mov-nota').textContent = h && h.mov ? 'Viene de una venta anotada: puedes cambiar cantidad, fecha y nota.' : `Ahora hay ${item.stockActual}.`;
+    $('inv-mov-borrar').hidden = !h;
+    d.showModal();
+    setTimeout(() => f.cantidad.select(), 50);
+    const valor = await new Promise(listo => d.addEventListener('close', () => listo(d.returnValue), { once: true }));
+    if (valor === 'borrar' && h) { await quitarEntrada(id, h); repintar(); return true; }
+    if (valor !== 'guardar') return false;
+    const cantidad = Math.max(0, parseInt(f.cantidad.value, 10) || 0);
+    if (!cantidad) return false;
+    const nuevo = { tipo: f.tipo.value, cantidad, fecha: f.fecha.value || hoy, nota: f.nota.value.trim() };
+    const r = cola.then(async () => {
+      const x = (await DB.inventario()).find(i => i.id === id);
+      if (!x) return;
+      const signo = t => (t === 'compra' ? 1 : -1);
+      if (h) {
+        const e = x.historial.find(k => (h.hid && k.hid === h.hid) || (!h.hid && k.fecha === h.fecha && k.tipo === h.tipo && k.cantidad === h.cantidad && k.nota === h.nota && k.mov === h.mov));
+        if (!e) return;
+        x.stockActual -= signo(e.tipo) * e.cantidad;
+        Object.assign(e, nuevo, { nota: nuevo.nota || e.nota }, e.mov ? { tipo: e.tipo, editado: true } : {});
+        x.stockActual += signo(e.tipo) * e.cantidad;
+      } else {
+        x.historial.push({ hid: nuevoHid(), ...nuevo, nota: nuevo.nota || (nuevo.tipo === 'compra' ? 'Entrada manual' : 'Salida manual'), fuente: 'manual' });
+        x.stockActual += signo(nuevo.tipo) * cantidad;
+      }
+      await DB.guardarInventario(x);
+      avisar(`${x.nombre}: quedan ${x.stockActual}`);
+      if (x.stockActual <= x.stockMinimo && nuevo.tipo === 'venta') avisar(`⚠️ Stock bajo: quedan ${x.stockActual} de ${x.nombre}`, null, 5000);
+    });
+    cola = r.catch(() => {});
+    await r;
+    repintar();
+    return true;
   }
 
   // ---------- Curva de todos los productos ----------
@@ -438,7 +460,11 @@ const Inventario = (() => {
     $overlay.innerHTML = `
       <div class="modal">
         <h2>Historial: ${escapar(item.nombre)}</h2>
-        <p class="nota">Empezó con ${item.stockInicial}. Si algo está mal (por ejemplo la voz entendió otro producto), bórralo con 🗑️ y el stock se corrige.</p>
+        <p class="nota">Empezó con ${item.stockInicial}, quedan ${item.stockActual}. Toca ✏️ para cambiar cantidad, fecha o nota, o 🗑️ para borrar.</p>
+        <div class="hist-agregar">
+          <button type="button" data-nuevo="compra">+ Agregar</button>
+          <button type="button" data-nuevo="venta">− Retirar</button>
+        </div>
         <div class="historial-list">
           ${filas.length ? filas.map(({ h, i }) => `
             <div class="historial-row">
@@ -447,13 +473,20 @@ const Inventario = (() => {
                 <strong>${h.tipo === 'compra' ? '+' : '−'}${h.cantidad} · ${escapar(String(h.fecha).slice(5).split('-').reverse().join('/'))}</strong>
                 <small>${FUENTES[h.fuente] || FUENTES.manual}${h.mov && frases[h.mov] ? `: «${escapar(frases[h.mov])}»` : h.nota ? `: ${escapar(h.nota)}` : ''}</small>
               </span>
+              <button type="button" class="hist-borrar hist-editar" data-e="${i}" aria-label="Editar">✏️</button>
               <button type="button" class="hist-borrar" data-i="${i}" aria-label="Borrar">🗑️</button>
             </div>`).join('') : '<p class="nota">Sin movimientos.</p>'}
         </div>
         <button type="button" class="hist-cerrar">Cerrar</button>
       </div>`;
     $overlay.querySelector('.hist-cerrar').addEventListener('click', () => $overlay.remove());
-    $overlay.querySelectorAll('.hist-borrar').forEach(b => b.addEventListener('click', async () => {
+    $overlay.querySelectorAll('[data-nuevo]').forEach(b => b.addEventListener('click', async () => {
+      if (await abrirMov(item.id, { tipo: b.dataset.nuevo })) abrirHistorial(item, $overlay);
+    }));
+    $overlay.querySelectorAll('[data-e]').forEach(b => b.addEventListener('click', async () => {
+      if (await abrirMov(item.id, { h: item.historial[Number(b.dataset.e)] })) abrirHistorial(item, $overlay);
+    }));
+    $overlay.querySelectorAll('.hist-borrar[data-i]').forEach(b => b.addEventListener('click', async () => {
       const h = item.historial[Number(b.dataset.i)];
       const ok = await confirmar('¿Borrar este movimiento?',
         `${h.tipo === 'compra' ? 'Entrada' : 'Salida'} de ${h.cantidad} (${h.nota || ''}). El stock ${h.tipo === 'compra' ? 'baja' : 'sube'} ${h.cantidad}.${h.mov ? ' La venta sigue en Movimientos, pero ya no descuenta este producto.' : ''}`, 'Borrar');
@@ -467,7 +500,7 @@ const Inventario = (() => {
   function quitarEntrada(id, h) {
     const r = cola.then(async () => {
       const item = (await DB.inventario()).find(i => i.id === id);
-      const k = item && item.historial.findIndex(x => x === h || (x.fecha === h.fecha && x.tipo === h.tipo && x.cantidad === h.cantidad && x.nota === h.nota && x.mov === h.mov));
+      const k = item && item.historial.findIndex(x => (h.hid && x.hid === h.hid) || (x.fecha === h.fecha && x.tipo === h.tipo && x.cantidad === h.cantidad && x.nota === h.nota && x.mov === h.mov));
       if (k == null || k < 0) return;
       item.historial.splice(k, 1);
       item.stockActual += h.tipo === 'compra' ? -h.cantidad : h.cantidad;
@@ -658,10 +691,11 @@ const Inventario = (() => {
     for (const item of items) {
       let cambio = false;
       const antes = item.stockActual;
+      for (const h of item.historial) if (!h.hid) { h.hid = nuevoHid(); cambio = true; }
       item.historial = item.historial.filter(h => {
         if (!h.mov) return true;
         const q = (quiere.get(h.mov) || []).find(x => x.item.id === item.id);
-        if (q && q.cantidad === h.cantidad) return true;
+        if (q && (q.cantidad === h.cantidad || h.editado)) return true;
         item.stockActual += h.cantidad;
         cambio = true;
         return false;
@@ -669,7 +703,7 @@ const Inventario = (() => {
       for (const [id, lista] of quiere) {
         const q = lista.find(x => x.item.id === item.id);
         if (!q || item.historial.some(h => h.mov === id)) continue;
-        item.historial.push({ fecha: String(q.m.fecha).slice(0, 10), tipo: 'venta', cantidad: q.cantidad,
+        item.historial.push({ hid: nuevoHid(), fecha: String(q.m.fecha).slice(0, 10), tipo: 'venta', cantidad: q.cantidad,
           nota: q.m.nota || q.m.frase || 'Venta', fuente: 'venta', mov: id });
         item.stockActual -= q.cantidad;
         cambio = true;
