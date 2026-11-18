@@ -1,6 +1,6 @@
 // Anotar con teclado, resumen y presupuesto como el Excel de fer.
 // Montos siempre en centavos de dólar.
-const APP_VERSION = 'v36';
+const APP_VERSION = 'v37';
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
   'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
@@ -211,8 +211,9 @@ async function pintarProductosVenta() {
   if (!items.length) return;
   $('productos-botones').innerHTML = items.map(i =>
     `<button type="button" class="cat" data-producto="${escapar(i.nombre)}"><span>📦</span>${escapar(i.nombre)}<small>quedan ${i.stockActual}</small></button>`
-  ).join('') + (items.length > 1
-    ? `<button type="button" class="cat" data-producto="Combo"><span>🎁</span>Combo<small>uno de cada</small></button>` : '');
+  ).join('') + (Inventario.combos(esp).length
+    ? Inventario.combos(esp).map(c => `<button type="button" class="cat" data-producto="${escapar(c.nombre)}"><span>🎁</span>${escapar(c.nombre)}<small>combo</small></button>`).join('')
+    : items.length > 1 ? `<button type="button" class="cat" data-producto="Combo"><span>🎁</span>Combo<small>uno de cada</small></button>` : '');
 }
 
 function conceptoVentas() {
