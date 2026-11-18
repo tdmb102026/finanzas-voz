@@ -1,6 +1,6 @@
 // Anotar con teclado, resumen y presupuesto como el Excel de fer.
 // Montos siempre en centavos de dólar.
-const APP_VERSION = 'v41';
+const APP_VERSION = 'v42';
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
   'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
@@ -209,9 +209,13 @@ async function pintarProductosVenta() {
   if (esp !== estado.espacio) return;
   caja.hidden = !items.length;
   if (!items.length) return;
-  $('productos-botones').innerHTML = items.map(i =>
-    `<button type="button" class="cat" data-producto="${escapar(i.nombre)}"><span>📦</span>${escapar(i.nombre)}<small>quedan ${i.stockActual}</small></button>`
-  ).join('') + (Inventario.combos(esp).length
+  // Un producto por partes (Magis TV) tiene dos botones: uno entero y una parte.
+  $('productos-botones').innerHTML = items.map(i => {
+    if (Inventario.porPartes(i) === 1) return `<button type="button" class="cat" data-producto="${escapar(i.nombre)}"><span>📦</span>${escapar(i.nombre)}<small>quedan ${i.stockActual}</small></button>`;
+    const u = Inventario.palabrasLista(i.unidad)[0] || 'entero', p = Inventario.palabrasLista(i.parte)[0] || 'parte';
+    return `<button type="button" class="cat" data-producto="${escapar(`1 ${u} · ${i.nombre}`)}"><span>📦</span>1 ${escapar(u)}<small>${escapar(i.nombre)} · quedan ${escapar(Inventario.cuanto(i, i.stockActual))}</small></button>`
+      + `<button type="button" class="cat" data-producto="${escapar(`1 ${p} · ${i.nombre}`)}"><span>👤</span>1 ${escapar(p)}<small>${escapar(i.nombre)}</small></button>`;
+  }).join('') + (Inventario.combos(esp).length
     ? Inventario.combos(esp).map(c => `<button type="button" class="cat" data-producto="${escapar(c.nombre)}"><span>🎁</span>${escapar(c.nombre)}<small>combo</small></button>`).join('')
     : items.length > 1 ? `<button type="button" class="cat" data-producto="Combo"><span>🎁</span>Combo<small>uno de cada</small></button>` : '');
 }

@@ -6,6 +6,20 @@ const Inventario = (() => {
   // Cada línea del historial tiene su id (`hid`) para poder editarla o borrarla.
   const nuevoHid = () => 'h' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   // Ventas que fer quitó del historial: ya no descuentan ese producto.
+  // Productos que se venden por partes (Magis TV: 1 crédito = 3 usuarios). Todo se guarda en partes.
+  const porPartes = item => Math.max(1, item.partes || 1);
+  const palabrasLista = t => String(t || '').split(/[,;]+/).map(x => x.trim()).filter(Boolean);
+  const plural = (w, n) => (n === 1 ? w : /[aeiouáéíóú]$/i.test(w) ? w + 's' : w + 'es');
+  // Texto de una cantidad: "48 créditos y 2 usuarios" (o solo el número si no va por partes).
+  function cuanto(item, n) {
+    const p = porPartes(item);
+    if (p === 1) return String(n);
+    const neg = n < 0;
+    n = Math.abs(n);
+    const e = Math.floor(n / p), r = n % p;
+    const u = palabrasLista(item.unidad)[0] || 'entero', pa = palabrasLista(item.parte)[0] || 'parte';
+    return (neg ? '−' : '') + [e || !r ? `${e} ${plural(u, e)}` : '', r ? `${r} ${plural(pa, r)}` : ''].filter(Boolean).join(' y ');
+  }
   const ignorado = (item, movId) => (item.ignorados || []).includes(movId);
   // Tarjetas abiertas: siguen abiertas al repintar.
   const abiertos = new Set();
@@ -71,8 +85,9 @@ const Inventario = (() => {
     const mes = fechaLocal().slice(0, 7);
     const vendidas = item => item.historial.filter(h => h.tipo === 'venta' && String(h.fecha).startsWith(mes))
       .reduce((a, h) => a + h.cantidad, 0);
-    const total = items.reduce((a, x) => a + x.stockActual, 0);
-    const vendidasMes = items.reduce((a, x) => a + vendidas(x), 0);
+    const solo = items.length === 1 && porPartes(items[0]) > 1 ? items[0] : null;
+    const total = solo ? cuanto(solo, solo.stockActual) : items.reduce((a, x) => a + Math.floor(x.stockActual / porPartes(x)), 0);
+    const vendidasMes = solo ? cuanto(solo, vendidas(solo)) : items.reduce((a, x) => a + Math.floor(vendidas(x) / porPartes(x)), 0);
     const bajos = items.filter(x => x.stockActual <= x.stockMinimo);
     // Plata por producto: ventas menos gastos (envíos, etc.) que nombran el producto. Un combo se reparte por unidades.
     const plata = {};
@@ -95,7 +110,7 @@ const Inventario = (() => {
     const $res = document.createElement('div');
     $res.className = 'inventario-resumen';
     $res.innerHTML = `
-      <div><strong>${total}</strong><small>unidades en bodega</small></div>
+      <div><strong>${total}</strong><small>${solo ? "en bodega" : "unidades en bodega"}</small></div>
       <div><strong>${vendidasMes}</strong><small>vendidas este mes</small></div>
       <div><strong>${dinero(netoMes)}</strong><small>ganado este mes</small></div>
       <div><strong class="${bajos.length ? 'stock-bajo' : ''}">${bajos.length}</strong><small>con stock bajo</small></div>`;
@@ -130,6 +145,7 @@ const Inventario = (() => {
       const salieron = salidas.reduce((a, h) => a + h.cantidad, 0);
       const entraron = entradas.reduce((a, h) => a + h.cantidad, 0);
       const tope = Math.max(item.stockInicial + entraron, item.stockActual, 1);
+      const p = porPartes(item), c = n => cuanto(item, n);
       const pct = Math.round(item.stockActual / tope * 100);
       // Ritmo: lo vendido en los últimos 30 días.
       // Si el inventario empezó hace menos de 30 días, se cuenta desde ahí (mínimo una semana).
@@ -155,11 +171,11 @@ const Inventario = (() => {
         <summary>
           <div class="inventario-header">
             <span class="inventario-nombre">${escapar(item.nombre)}</span>
-            <span class="inventario-stock${alerta ? ' stock-bajo' : ''}"><strong>${item.stockActual}</strong> de ${tope}</span>
+            <span class="inventario-stock${alerta ? ' stock-bajo' : ''}">${p > 1 ? `<strong>${c(item.stockActual)}</strong>` : `<strong>${item.stockActual}</strong> de ${tope}`}</span>
           </div>
           <div class="inv-barra${alerta ? ' baja' : ''}"><i style="width:${pct}%"></i></div>
           <div class="inv-pie">
-            <p class="inventario-vendidas">Vendidas este mes: ${vendidas(item)} · <b class="inv-plata">${dinero(pl.ventasMes - pl.gastosMes)}</b>${alerta ? '<br>⚠️ stock bajo' : ''}</p>
+            <p class="inventario-vendidas">Vendidas este mes: ${c(vendidas(item))} · <b class="inv-plata">${dinero(pl.ventasMes - pl.gastosMes)}</b>${alerta ? '<br>⚠️ stock bajo' : ''}</p>
             <span class="inv-paso">
               <button type="button" class="inv-uno" data-id="${escapar(item.id)}" data-tipo="venta" aria-label="Sacar uno">−</button>
               <button type="button" class="inv-uno" data-id="${escapar(item.id)}" data-tipo="compra" aria-label="Agregar uno">+</button>
@@ -169,11 +185,12 @@ const Inventario = (() => {
         </summary>
         <div class="inv-detalle">
           <div class="inv-datos">
-            <div><strong>${item.stockInicial}</strong><small>al empezar</small></div>
-            <div><strong>+${entraron}</strong><small>entraron</small></div>
-            <div><strong>${salieron ? `−${salieron}` : 0}</strong><small>salieron</small></div>
-            <div><strong>${porSemana ? porSemana.toFixed(1).replace('.0', '') : '0'}</strong><small>por semana</small></div>
+            <div><strong>${c(item.stockInicial)}</strong><small>al empezar</small></div>
+            <div><strong>+${c(entraron)}</strong><small>entraron</small></div>
+            <div><strong>${salieron ? `−${c(salieron)}` : 0}</strong><small>salieron</small></div>
+            <div><strong>${p > 1 ? c(Math.round(porSemana)) : porSemana ? porSemana.toFixed(1).replace('.0', '') : '0'}</strong><small>por semana</small></div>
           </div>
+          ${p > 1 ? `<p class="nota">1 ${escapar(palabrasLista(item.unidad)[0] || 'entero')} = ${p} ${escapar(plural(palabrasLista(item.parte)[0] || 'parte', p))}. El gráfico y los − / + van de a ${escapar(palabrasLista(item.parte)[0] || 'parte')}.</p>` : ''}
           <div class="inv-ganancia">
             <div><small>Este mes</small><span>Ventas <b>${dinero(pl.ventasMes)}</b></span><span>Envíos y gastos <b>−${dinero(pl.gastosMes)}</b></span><span class="neto">Ganaste <b>${dinero(pl.ventasMes - pl.gastosMes)}</b></span></div>
             <div><small>Desde que empezaste</small><span>Ventas <b>${dinero(pl.ventas)}</b></span><span>Envíos y gastos <b>−${dinero(pl.gastos)}</b></span><span class="neto">Ganaste <b>${dinero(pl.ventas - pl.gastos)}</b></span></div>
@@ -184,7 +201,7 @@ const Inventario = (() => {
           </div>
           <p class="inv-grafico-pie"><span>hace ${DIAS_GRAFICO - 1} días</span><span>hoy</span></p>
           ${ultimos.length ? `<ul class="inv-ultimos">${ultimos.map(h => `
-            <li><span>${h.tipo === 'compra' ? '📥' : '📤'} ${h.tipo === 'compra' ? '+' : '−'}${h.cantidad}</span>
+            <li><span>${h.tipo === 'compra' ? '📥' : '📤'} ${h.tipo === 'compra' ? '+' : '−'}${c(h.cantidad)}</span>
               <small>${escapar(h.nota || '')}</small><small>${escapar(String(h.fecha).slice(5).split('-').reverse().join('/'))}</small></li>`).join('')}</ul>`
             : '<p class="nota">Todavía sin movimientos.</p>'}
           <div class="inventario-acciones">
@@ -316,8 +333,8 @@ const Inventario = (() => {
       const item = await registrarMovimiento(id, tipo, 1, tipo === 'venta' ? 'Salida manual' : 'Entrada manual');
       if (!item) return;
       vibrar(10);
-      avisar(`${item.nombre}: ${tipo === 'venta' ? '−1' : '+1'} → quedan ${item.stockActual}`, () => deshacerUno(id));
-      if (tipo === 'venta' && item.stockActual === item.stockMinimo) avisar(`⚠️ Stock bajo: quedan ${item.stockActual} de ${item.nombre}`, () => deshacerUno(id), 5000);
+      avisar(`${item.nombre}: ${tipo === 'venta' ? '−' : '+'}${cuanto(item, 1)} → quedan ${cuanto(item, item.stockActual)}`, () => deshacerUno(id));
+      if (tipo === 'venta' && item.stockActual === item.stockMinimo) avisar(`⚠️ Stock bajo: quedan ${cuanto(item, item.stockActual)} de ${item.nombre}`, () => deshacerUno(id), 5000);
       repintar();
     });
     cola = r.catch(() => {});
@@ -349,18 +366,23 @@ const Inventario = (() => {
     $('inv-mov-titulo').textContent = `${h ? 'Editar' : tipo === 'compra' ? 'Agregar' : 'Retirar'} · ${item.nombre}`;
     f.tipo.value = h ? h.tipo : tipo;
     f.querySelectorAll('[name=tipo]').forEach(r => { r.disabled = !!(h && h.mov); });
-    f.cantidad.value = h ? h.cantidad : 1;
+    const p = porPartes(item);
+    $('inv-mov-en').hidden = p === 1;
+    f.en.innerHTML = p === 1 ? '<option value="1">unidades</option>'
+      : `<option value="${p}">${escapar(plural(palabrasLista(item.unidad)[0] || 'entero', 2))} (de ${p})</option><option value="1">${escapar(plural(palabrasLista(item.parte)[0] || 'parte', 2))}</option>`;
+    f.en.value = h && h.cantidad % p ? 1 : p;
+    f.cantidad.value = h ? h.cantidad / Number(f.en.value) : 1;
     f.fecha.value = h ? h.fecha : hoy;
     f.fecha.max = hoy;
     f.nota.value = h ? (h.nota || '') : '';
-    $('inv-mov-nota').textContent = h && h.mov ? 'Viene de una venta anotada: puedes cambiar cantidad, fecha y nota.' : `Ahora hay ${item.stockActual}.`;
+    $('inv-mov-nota').textContent = h && h.mov ? 'Viene de una venta anotada: puedes cambiar cantidad, fecha y nota.' : `Ahora hay ${cuanto(item, item.stockActual)}.`;
     $('inv-mov-borrar').hidden = !h;
     d.showModal();
     setTimeout(() => f.cantidad.select(), 50);
     const valor = await new Promise(listo => d.addEventListener('close', () => listo(d.returnValue), { once: true }));
     if (valor === 'borrar' && h) { await quitarEntrada(id, h); repintar(); return true; }
     if (valor !== 'guardar') return false;
-    const cantidad = Math.max(0, parseInt(f.cantidad.value, 10) || 0);
+    const cantidad = Math.max(0, parseInt(f.cantidad.value, 10) || 0) * (Number(f.en.value) || 1);
     if (!cantidad) return false;
     const nuevo = { tipo: f.tipo.value, cantidad, fecha: f.fecha.value || hoy, nota: f.nota.value.trim() };
     const r = cola.then(async () => {
@@ -378,8 +400,8 @@ const Inventario = (() => {
         x.stockActual += signo(nuevo.tipo) * cantidad;
       }
       await DB.guardarInventario(x);
-      avisar(`${x.nombre}: quedan ${x.stockActual}`);
-      if (x.stockActual <= x.stockMinimo && nuevo.tipo === 'venta') avisar(`⚠️ Stock bajo: quedan ${x.stockActual} de ${x.nombre}`, null, 5000);
+      avisar(`${x.nombre}: quedan ${cuanto(x, x.stockActual)}`);
+      if (x.stockActual <= x.stockMinimo && nuevo.tipo === 'venta') avisar(`⚠️ Stock bajo: quedan ${cuanto(x, x.stockActual)} de ${x.nombre}`, null, 5000);
     });
     cola = r.catch(() => {});
     await r;
@@ -399,9 +421,9 @@ const Inventario = (() => {
     if (dias.length < 2) dias.unshift(dia(new Date(hoy.getTime() - 864e5)));
     const series = items.map((item, k) => {
       const valores = dias.map(f => {
-        if (modo === 'ventas') return item.historial.filter(h => h.tipo === 'venta' && h.fecha === f).reduce((a, h) => a + h.cantidad, 0);
+        if (modo === 'ventas') return item.historial.filter(h => h.tipo === 'venta' && h.fecha === f).reduce((a, h) => a + h.cantidad, 0) / porPartes(item);
         return item.historial.filter(h => h.fecha <= f)
-          .reduce((a, h) => a + (h.tipo === 'compra' ? h.cantidad : -h.cantidad), item.stockInicial);
+          .reduce((a, h) => a + (h.tipo === 'compra' ? h.cantidad : -h.cantidad), item.stockInicial) / porPartes(item);
       });
       return { item, valores, color: COLORES[k % COLORES.length] };
     });
@@ -436,7 +458,7 @@ const Inventario = (() => {
         </svg>
         <ul class="curva-leyenda">${series.map(sr => `
           <li><i style="background:${sr.color}"></i>${escapar(sr.item.nombre)}
-            <b>${modo === 'stock' ? `${sr.item.stockActual} quedan` : (n => `${n} vendida${n === 1 ? '' : 's'}`)(sr.valores.reduce((a, v) => a + v, 0))}</b></li>`).join('')}</ul>
+            <b>${modo === 'stock' ? `${cuanto(sr.item, sr.item.stockActual)} quedan` : porPartes(sr.item) > 1 ? `${cuanto(sr.item, Math.round(sr.valores.reduce((a, v) => a + v, 0) * porPartes(sr.item)))} vendidos` : (n => `${n} vendida${n === 1 ? '' : 's'}`)(sr.valores.reduce((a, v) => a + v, 0))}</b></li>`).join('')}</ul>
         <button type="button" class="hist-cerrar">Cerrar</button>
       </div>`;
     $overlay.querySelector('.hist-cerrar').addEventListener('click', () => $overlay.remove());
@@ -460,7 +482,7 @@ const Inventario = (() => {
     $overlay.innerHTML = `
       <div class="modal">
         <h2>Historial: ${escapar(item.nombre)}</h2>
-        <p class="nota">Empezó con ${item.stockInicial}, quedan ${item.stockActual}. Toca ✏️ para cambiar cantidad, fecha o nota, o 🗑️ para borrar.</p>
+        <p class="nota">Empezó con ${cuanto(item, item.stockInicial)}, quedan ${cuanto(item, item.stockActual)}. Toca ✏️ para cambiar cantidad, fecha o nota, o 🗑️ para borrar.</p>
         <div class="hist-agregar">
           <button type="button" data-nuevo="compra">+ Agregar</button>
           <button type="button" data-nuevo="venta">− Retirar</button>
@@ -470,7 +492,7 @@ const Inventario = (() => {
             <div class="historial-row">
               <span class="historial-tipo">${h.tipo === 'compra' ? '📥' : '📤'}</span>
               <span class="historial-texto">
-                <strong>${h.tipo === 'compra' ? '+' : '−'}${h.cantidad} · ${escapar(String(h.fecha).slice(5).split('-').reverse().join('/'))}</strong>
+                <strong>${h.tipo === 'compra' ? '+' : '−'}${cuanto(item, h.cantidad)} · ${escapar(String(h.fecha).slice(5).split('-').reverse().join('/'))}</strong>
                 <small>${FUENTES[h.fuente] || FUENTES.manual}${h.mov && frases[h.mov] ? `: «${escapar(frases[h.mov])}»` : h.nota ? `: ${escapar(h.nota)}` : ''}</small>
               </span>
               <button type="button" class="hist-borrar hist-editar" data-e="${i}" aria-label="Editar">✏️</button>
@@ -489,7 +511,7 @@ const Inventario = (() => {
     $overlay.querySelectorAll('.hist-borrar[data-i]').forEach(b => b.addEventListener('click', async () => {
       const h = item.historial[Number(b.dataset.i)];
       const ok = await confirmar('¿Borrar este movimiento?',
-        `${h.tipo === 'compra' ? 'Entrada' : 'Salida'} de ${h.cantidad} (${h.nota || ''}). El stock ${h.tipo === 'compra' ? 'baja' : 'sube'} ${h.cantidad}.${h.mov ? ' La venta sigue en Movimientos, pero ya no descuenta este producto.' : ''}`, 'Borrar');
+        `${h.tipo === 'compra' ? 'Entrada' : 'Salida'} de ${cuanto(item, h.cantidad)} (${h.nota || ''}). El stock ${h.tipo === 'compra' ? 'baja' : 'sube'} ${cuanto(item, h.cantidad)}.${h.mov ? ' La venta sigue en Movimientos, pero ya no descuenta este producto.' : ''}`, 'Borrar');
       if (!ok) return;
       await quitarEntrada(item.id, h);
       repintar();
@@ -514,21 +536,39 @@ const Inventario = (() => {
   function editarProducto(item) {
     const d = $('inv-editar'), f = $('inv-editar-form');
     f.nombre.value = item.nombre;
-    f.inicial.value = item.stockInicial;
-    f.minimo.value = item.stockMinimo;
+    const p0 = porPartes(item);
+    f.inicial.value = +(item.stockInicial / p0).toFixed(2);
+    f.minimo.value = +(item.stockMinimo / p0).toFixed(2);
+    f.partes.value = p0;
+    f.unidad.value = item.unidad || '';
+    f.parte.value = item.parte || '';
+    const verPartes = () => { $('inv-editar-partes').hidden = (parseInt(f.partes.value, 10) || 1) < 2; };
+    f.partes.oninput = verPartes;
+    verPartes();
     d.showModal();
     d.addEventListener('close', () => {
       if (d.returnValue !== 'guardar') return;
       const r = cola.then(async () => {
         const x = (await DB.inventario()).find(i => i.id === item.id);
         if (!x) return;
-        const inicial = Math.max(0, parseInt(f.inicial.value, 10) || 0);
+        // Cambiar en cuántas partes viene: todo lo guardado se pasa a la nueva medida.
+        const pa = porPartes(x), pn = Math.max(1, Math.min(100, parseInt(f.partes.value, 10) || 1));
+        if (pn !== pa) {
+          const k = n => Math.round(n * pn / pa);
+          x.stockActual = k(x.stockActual);
+          x.stockInicial = k(x.stockInicial);
+          x.historial.forEach(h => { h.cantidad = k(h.cantidad); });
+        }
+        x.partes = pn;
+        x.unidad = f.unidad.value.trim();
+        x.parte = f.parte.value.trim();
+        const inicial = Math.max(0, Math.round((parseFloat(f.inicial.value) || 0) * pn));
         x.stockActual += inicial - x.stockInicial;
         x.stockInicial = inicial;
-        x.stockMinimo = Math.max(0, parseInt(f.minimo.value, 10) || 0);
+        x.stockMinimo = Math.max(0, Math.round((parseFloat(f.minimo.value) || 0) * pn));
         x.nombre = f.nombre.value.trim() || x.nombre;
         await DB.guardarInventario(x);
-        avisar(`Guardado: ${x.nombre} (quedan ${x.stockActual})`);
+        avisar(`Guardado: ${x.nombre} (quedan ${cuanto(x, x.stockActual)})`);
         repintar();
       });
       cola = r.catch(() => {});
@@ -614,7 +654,7 @@ const Inventario = (() => {
   function combosEn(texto, items, negocio) {
     const t = plano(texto), palabras = palabrasDe(texto);
     const guardados = combos(negocio).filter(c => Object.values(c.partes || {}).some(n => n > 0));
-    const partesDe = (c, veces) => items.filter(i => c.partes[i.id] > 0).map(item => ({ item, cantidad: c.partes[item.id] * veces }));
+    const partesDe = (c, veces) => items.filter(i => c.partes[i.id] > 0).map(item => ({ item, cantidad: c.partes[item.id] * veces * porPartes(item) }));
     for (const c of guardados) {
       if (!formasCombo(c).some(f => t.includes(f))) continue;
       const primera = palabrasDe(c.nombre).filter(Boolean)[0];
@@ -626,14 +666,35 @@ const Inventario = (() => {
     if (i < 0) return null;
     const veces = numeroAntes(palabras, i);
     if (guardados.length === 1) return partesDe(guardados[0], veces);
-    return items.map(item => ({ item, cantidad: veces }));
+    return items.map(item => ({ item, cantidad: veces * porPartes(item) }));
   }
 
   // Lo que salió en una venta: [{ item, cantidad }] (vacío si no nombra productos).
   // Todos los productos que nombra un texto: "una excavadora y una volqueta" = 1 y 1.
+  // En productos por partes: "dos usuarios" = 2 partes, "un crédito" = 1 entero; si solo nombra el producto, 1 entero.
+  // Una palabra sin número delante cuenta una sola vez ("1 crédito de Créditos Magis" = 1 crédito).
   function nombrados(texto, items) {
-    const t = plano(texto);
-    return items.filter(x => t.includes(raiz(x))).map(item => ({ item, cantidad: cantidadEn(texto, item) }));
+    const t = plano(texto), palabras = palabrasDe(texto);
+    const out = [];
+    for (const item of items) {
+      const p = porPartes(item);
+      let n = 0;
+      if (p > 1) {
+        let sueltas = 0;
+        for (const [lista, mult] of [[item.unidad, p], [item.parte, 1]]) {
+          const raices = palabrasLista(lista).map(w => plano(w).slice(0, 5)).filter(r => r.length >= 3);
+          const hits = palabras.map((w, i) => (w && raices.some(r => plano(w).startsWith(r)) ? i : -1)).filter(i => i >= 0);
+          const conNumero = hits.filter(i => NUMEROS[palabras[i - 1]] || /^\d{1,3}$/.test(palabras[i - 1] || ''));
+          n += conNumero.reduce((a, i) => a + numeroAntes(palabras, i), 0) * mult;
+          if (hits.length && !sueltas) sueltas = mult;
+          if (hits.length && mult === 1) sueltas = 1;
+        }
+        if (!n) n = sueltas;
+      }
+      if (!n && t.includes(raiz(item))) n = cantidadEn(texto, item) * p;
+      if (n) out.push({ item, cantidad: n });
+    }
+    return out;
   }
 
   // Lo que salió en una venta: [{ item, cantidad }] (vacío si no nombra productos).
@@ -718,7 +779,7 @@ const Inventario = (() => {
 
   async function avisarBajos(negocio) {
     const bajos = await sincronizar(negocio);
-    if (bajos.length) avisar(`⚠️ Stock bajo: ${bajos.map(b => `${b.nombre} (${b.stockActual})`).join(', ')}`, null, 5000);
+    if (bajos.length) avisar(`⚠️ Stock bajo: ${bajos.map(b => `${b.nombre} (${cuanto(b, b.stockActual)})`).join(', ')}`, null, 5000);
   }
 
   return {
@@ -730,6 +791,9 @@ const Inventario = (() => {
     inicializarImportCap,
     sincronizar,
     combos,
+    cuanto,
+    porPartes,
+    palabrasLista,
     avisarBajos,
   };
 })();
