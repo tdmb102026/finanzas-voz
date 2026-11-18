@@ -694,7 +694,14 @@ body.mes-pasado .mes-mini h1 { color: var(--acento); }
 .inv-ganancia span { display: flex; justify-content: space-between; gap: 6px; }
 .inv-ganancia .neto { border-top: 1px solid var(--borde); padding-top: 3px; margin-top: 2px; font-weight: 600; }
 .inv-ganancia .neto b { color: var(--ingreso); }
-.inv-borrar { display: block; margin: 12px auto 0; border: 0; background: none; color: var(--critico, #d9534f); font-size: 13px; font-weight: 600; padding: 6px; }
+.inv-editar-fila { display: flex; justify-content: space-between; margin-top: 8px; }
+.inv-editar { border: 0; background: none; color: var(--acento); font-size: 13px; font-weight: 600; padding: 6px; }
+.historial-texto { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.historial-texto small { color: var(--suave); font-size: 12px; }
+.hist-borrar { border: 0; background: none; font-size: 18px; padding: 4px 6px; }
+.modal .hist-borrar { width: auto; margin: 0; background: none; }
+.modal .nota { margin: 0 0 4px; }
+.inv-borrar { display: block; margin: 0; border: 0; background: none; color: var(--critico, #d9534f); font-size: 13px; font-weight: 600; padding: 6px; }
 .inv-combos { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
 .inv-combos h2 { margin: 0; font-size: 18px; }
 .inv-combos .nota { margin: 0; }

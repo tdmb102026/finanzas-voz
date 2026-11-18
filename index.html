@@ -298,6 +298,26 @@
     </form>
   </dialog>
 
+  <dialog id="inv-editar">
+    <form method="dialog" id="inv-editar-form">
+      <h2>Editar producto</h2>
+      <label>Nombre
+        <input name="nombre" autocomplete="off" maxlength="40">
+      </label>
+      <label>Stock inicial (con cuántas empezaste)
+        <input name="inicial" type="number" inputmode="numeric" min="0" step="1">
+      </label>
+      <label>Avisar cuando queden (stock bajo)
+        <input name="minimo" type="number" inputmode="numeric" min="0" step="1">
+      </label>
+      <p class="nota">Al cambiar el stock inicial, lo que queda sube o baja lo mismo.</p>
+      <div class="editor-botones">
+        <button value="cancelar" formnovalidate>Cancelar</button>
+        <button value="guardar" class="principal">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="inv-confirmar">
     <form method="dialog">
       <h2 id="inv-confirmar-titulo"></h2>

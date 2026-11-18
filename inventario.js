@@ -3,6 +3,8 @@
 
 const Inventario = (() => {
   const STOCK_MINIMO_DEFAULT = 10;
+  // Ventas que fer quitó del historial: ya no descuentan ese producto.
+  const ignorado = (item, movId) => (item.ignorados || []).includes(movId);
   // Tarjetas abiertas: siguen abiertas al repintar.
   const abiertos = new Set();
 
@@ -76,7 +78,7 @@ const Inventario = (() => {
     for (const m of await DB.todos()) {
       if ((m.negocio || '') !== negocio || m.estado === 'pendiente' || (m.tipo !== 'ingreso' && m.tipo !== 'gasto')) continue;
       const dia = String(m.fecha).slice(0, 10);
-      const ps = productosDe(m, items).filter(p => dia >= (p.item.desde || DESDE_ANTIGUO));
+      const ps = productosDe(m, items).filter(p => dia >= (p.item.desde || DESDE_ANTIGUO) && !ignorado(p.item, m.id));
       const unidades = ps.reduce((a, p) => a + p.cantidad, 0);
       for (const p of ps) {
         const parte = Math.round((m.monto || 0) * p.cantidad / unidades);
@@ -157,7 +159,7 @@ const Inventario = (() => {
           <div class="inv-datos">
             <div><strong>${item.stockInicial}</strong><small>al empezar</small></div>
             <div><strong>+${entraron}</strong><small>entraron</small></div>
-            <div><strong>−${salieron}</strong><small>salieron</small></div>
+            <div><strong>${salieron ? `−${salieron}` : 0}</strong><small>salieron</small></div>
             <div><strong>${porSemana ? porSemana.toFixed(1).replace('.0', '') : '0'}</strong><small>por semana</small></div>
           </div>
           <div class="inv-ganancia">
@@ -176,9 +178,12 @@ const Inventario = (() => {
           <div class="inventario-acciones">
             <button type="button" class="inv-menos" data-id="${escapar(item.id)}">− Sacar varias</button>
             <button type="button" class="inv-mas" data-id="${escapar(item.id)}">+ Agregar varias</button>
-            <button type="button" class="inv-hist" data-id="${escapar(item.id)}">Todo</button>
+            <button type="button" class="inv-hist" data-id="${escapar(item.id)}">Historial</button>
           </div>
-          <button type="button" class="inv-borrar" data-id="${escapar(item.id)}">🗑️ Borrar producto</button>
+          <div class="inv-editar-fila">
+            <button type="button" class="inv-editar" data-id="${escapar(item.id)}">✏️ Editar stock inicial</button>
+            <button type="button" class="inv-borrar" data-id="${escapar(item.id)}">🗑️ Borrar producto</button>
+          </div>
         </div>
       `;
       $div.appendChild($card);
@@ -202,6 +207,7 @@ const Inventario = (() => {
     $div.appendChild($combos);
     $combos.querySelectorAll('[data-combo]').forEach(b => b.addEventListener('click', () => editarCombo(negocio, items, lista.find(c => c.id === b.dataset.combo))));
     $combos.querySelector('.inv-nuevo-combo').addEventListener('click', () => editarCombo(negocio, items, null));
+    $div.querySelectorAll('.inv-editar').forEach(b => b.addEventListener('click', () => editarProducto(items.find(i => i.id === b.dataset.id))));
     $div.querySelectorAll('.inv-borrar').forEach(b => b.addEventListener('click', () => borrarProducto(items.find(i => i.id === b.dataset.id))));
 
     // − / + de la tarjeta: de a uno, sin abrirla (están dentro del summary).
@@ -349,44 +355,85 @@ const Inventario = (() => {
     }
   }
 
-  async function abrirHistorial(item) {
-    const $overlay = document.createElement('div');
-    $overlay.className = 'modal-overlay';
-    const $modal = document.createElement('div');
-    $modal.className = 'modal';
+  const FUENTES = { voz: '🎙️ Venta anotada', venta: '🎙️ Venta anotada', manual: '✋ A mano' };
 
-    const $title = document.createElement('h2');
-    $title.textContent = `Historial: ${item.nombre}`;
-    $modal.appendChild($title);
-
-    const $list = document.createElement('div');
-    $list.className = 'historial-list';
-
-    if (item.historial.length === 0) {
-      $list.innerHTML = '<p style="text-align: center; color: var(--suave);">Sin movimientos</p>';
-    } else {
-      item.historial.reverse().forEach(h => {
-        const $row = document.createElement('div');
-        $row.className = 'historial-row';
-        $row.innerHTML = `
-          <span class="historial-fecha">${escapar(h.fecha)}</span>
-          <span class="historial-tipo">${h.tipo === 'compra' ? '📥' : '📤'}</span>
-          <span class="historial-cantidad">${h.cantidad} unidades</span>
-          <span class="historial-nota">${escapar(h.nota)}</span>
-        `;
-        $list.appendChild($row);
-      });
+  async function abrirHistorial(item, $overlay) {
+    item = (await DB.inventario()).find(i => i.id === item.id) || item;
+    const frases = {};
+    for (const m of await DB.todos()) frases[m.id] = m.frase || m.nota || '';
+    if (!$overlay) {
+      $overlay = document.createElement('div');
+      $overlay.className = 'modal-overlay';
+      $overlay.addEventListener('click', e => { if (e.target === $overlay) $overlay.remove(); });
+      document.body.appendChild($overlay);
     }
-    $modal.appendChild($list);
+    const filas = item.historial.map((h, i) => ({ h, i }))
+      .sort((a, b) => String(b.h.fecha).localeCompare(String(a.h.fecha)) || b.i - a.i);
+    $overlay.innerHTML = `
+      <div class="modal">
+        <h2>Historial: ${escapar(item.nombre)}</h2>
+        <p class="nota">Empezó con ${item.stockInicial}. Si algo está mal (por ejemplo la voz entendió otro producto), bórralo con 🗑️ y el stock se corrige.</p>
+        <div class="historial-list">
+          ${filas.length ? filas.map(({ h, i }) => `
+            <div class="historial-row">
+              <span class="historial-tipo">${h.tipo === 'compra' ? '📥' : '📤'}</span>
+              <span class="historial-texto">
+                <strong>${h.tipo === 'compra' ? '+' : '−'}${h.cantidad} · ${escapar(String(h.fecha).slice(5).split('-').reverse().join('/'))}</strong>
+                <small>${FUENTES[h.fuente] || FUENTES.manual}${h.mov && frases[h.mov] ? `: «${escapar(frases[h.mov])}»` : h.nota ? `: ${escapar(h.nota)}` : ''}</small>
+              </span>
+              <button type="button" class="hist-borrar" data-i="${i}" aria-label="Borrar">🗑️</button>
+            </div>`).join('') : '<p class="nota">Sin movimientos.</p>'}
+        </div>
+        <button type="button" class="hist-cerrar">Cerrar</button>
+      </div>`;
+    $overlay.querySelector('.hist-cerrar').addEventListener('click', () => $overlay.remove());
+    $overlay.querySelectorAll('.hist-borrar').forEach(b => b.addEventListener('click', async () => {
+      const h = item.historial[Number(b.dataset.i)];
+      const ok = await confirmar('¿Borrar este movimiento?',
+        `${h.tipo === 'compra' ? 'Entrada' : 'Salida'} de ${h.cantidad} (${h.nota || ''}). El stock ${h.tipo === 'compra' ? 'baja' : 'sube'} ${h.cantidad}.${h.mov ? ' La venta sigue en Movimientos, pero ya no descuenta este producto.' : ''}`, 'Borrar');
+      if (!ok) return;
+      await quitarEntrada(item.id, h);
+      repintar();
+      abrirHistorial(item, $overlay);
+    }));
+  }
 
-    const $btn = document.createElement('button');
-    $btn.type = 'button';
-    $btn.textContent = 'Cerrar';
-    $btn.addEventListener('click', () => $overlay.remove());
-    $modal.appendChild($btn);
+  function quitarEntrada(id, h) {
+    const r = cola.then(async () => {
+      const item = (await DB.inventario()).find(i => i.id === id);
+      const k = item && item.historial.findIndex(x => x === h || (x.fecha === h.fecha && x.tipo === h.tipo && x.cantidad === h.cantidad && x.nota === h.nota && x.mov === h.mov));
+      if (k == null || k < 0) return;
+      item.historial.splice(k, 1);
+      item.stockActual += h.tipo === 'compra' ? -h.cantidad : h.cantidad;
+      if (h.mov) item.ignorados = [...(item.ignorados || []), h.mov];
+      await DB.guardarInventario(item);
+    });
+    cola = r.catch(() => {});
+    return r;
+  }
 
-    $overlay.appendChild($modal);
-    document.body.appendChild($overlay);
+  function editarProducto(item) {
+    const d = $('inv-editar'), f = $('inv-editar-form');
+    f.nombre.value = item.nombre;
+    f.inicial.value = item.stockInicial;
+    f.minimo.value = item.stockMinimo;
+    d.showModal();
+    d.addEventListener('close', () => {
+      if (d.returnValue !== 'guardar') return;
+      const r = cola.then(async () => {
+        const x = (await DB.inventario()).find(i => i.id === item.id);
+        if (!x) return;
+        const inicial = Math.max(0, parseInt(f.inicial.value, 10) || 0);
+        x.stockActual += inicial - x.stockInicial;
+        x.stockInicial = inicial;
+        x.stockMinimo = Math.max(0, parseInt(f.minimo.value, 10) || 0);
+        x.nombre = f.nombre.value.trim() || x.nombre;
+        await DB.guardarInventario(x);
+        avisar(`Guardado: ${x.nombre} (quedan ${x.stockActual})`);
+        repintar();
+      });
+      cola = r.catch(() => {});
+    }, { once: true });
   }
 
   async function agregarProducto(negocio) {
@@ -514,7 +561,7 @@ const Inventario = (() => {
     for (const m of await DB.todos()) {
       if ((m.negocio || '') !== negocio || m.estado === 'pendiente' || m.tipo !== 'ingreso') continue;
       if (String(m.fecha).slice(0, 10) < desdeMin) continue;
-      const ps = productosDe(m, items).filter(p => String(m.fecha).slice(0, 10) >= (p.item.desde || DESDE_ANTIGUO));
+      const ps = productosDe(m, items).filter(p => String(m.fecha).slice(0, 10) >= (p.item.desde || DESDE_ANTIGUO) && !ignorado(p.item, m.id));
       if (ps.length) quiere.set(m.id, ps.map(p => ({ ...p, m })));
     }
     const bajos = [];
