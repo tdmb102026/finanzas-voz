@@ -659,13 +659,45 @@ body.mes-pasado .mes-mini h1 { color: var(--acento); }
 #vista-inventario { padding: 16px; }
 #inventario { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
 .inventario-card { background: var(--superficie); border: 1px solid var(--borde); border-radius: 12px; padding: 12px; }
+.inventario-card > summary { list-style: none; cursor: pointer; }
+.inventario-card > summary::-webkit-details-marker { display: none; }
+.inventario-stock strong { font-size: 20px; color: var(--texto); font-variant-numeric: tabular-nums; }
+.inventario-stock.stock-bajo strong { color: #ff9800; }
+.inv-barra { height: 8px; border-radius: 4px; background: var(--fondo); overflow: hidden; margin: 2px 0 8px; }
+.inv-barra i { display: block; height: 100%; background: var(--ingreso); border-radius: 4px; }
+.inv-barra.baja i { background: #ff9800; }
+.inv-flecha { float: right; font-size: 18px; line-height: 1; transition: transform .2s; }
+.inventario-card[open] .inv-flecha { transform: rotate(90deg); }
+.inventario-card > summary .inventario-vendidas { margin: 0; }
+.inv-detalle { border-top: 1px solid var(--borde); margin-top: 10px; padding-top: 10px; }
+.inv-datos { display: grid; grid-template-columns: repeat(4, 1fr); text-align: center; gap: 4px; }
+.inv-datos strong { display: block; font-size: 17px; font-variant-numeric: tabular-nums; }
+.inv-datos small { color: var(--suave); font-size: 11px; }
+.inv-detalle .nota { margin: 10px 0; }
+.inv-grafico { display: grid; grid-template-columns: repeat(14, 1fr); gap: 3px; height: 64px; align-items: end; }
+.inv-grafico span { position: relative; height: 100%; display: flex; align-items: flex-end; background: var(--fondo); border-radius: 3px; }
+.inv-grafico i { display: block; width: 100%; background: var(--acento); border-radius: 3px; min-height: 0; }
+.inv-grafico b { position: absolute; top: 2px; left: 0; right: 0; text-align: center; font-size: 10px; color: var(--suave); }
+.inv-grafico-pie { display: flex; justify-content: space-between; font-size: 11px; color: var(--suave); margin: 4px 0 10px; }
+.inv-ultimos { list-style: none; margin: 0 0 10px; padding: 0; }
+.inv-ultimos li { display: grid; grid-template-columns: 70px 1fr auto; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--borde); font-size: 13px; align-items: center; }
+.inv-ultimos li:last-child { border: 0; }
+.inv-ultimos small { color: var(--suave); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inv-plata { color: var(--ingreso); font-weight: 700; }
+.inv-ganancia { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.inv-ganancia > div { background: var(--fondo); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; }
+.inv-ganancia small { color: var(--suave); font-size: 11px; }
+.inv-ganancia span { display: flex; justify-content: space-between; gap: 6px; }
+.inv-ganancia .neto { border-top: 1px solid var(--borde); padding-top: 3px; margin-top: 2px; font-weight: 600; }
+.inv-ganancia .neto b { color: var(--ingreso); }
+.inv-todo { justify-self: end; align-self: flex-end; border: 0; background: none; color: var(--acento); font-weight: 600; font-size: 13px; padding: 2px 4px; }
 .inventario-card.alerta { border-color: #ff9800; background: rgba(255, 152, 0, 0.05); }
 .inventario-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
 .inventario-nombre { font-weight: 600; font-size: 16px; }
 .inventario-stock { font-size: 14px; color: var(--suave); }
 .inventario-stock.stock-bajo { color: #ff9800; font-weight: 600; }
 .inventario-acciones { display: flex; gap: 8px; }
-.inventario-resumen { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; background: var(--superficie); border: 1px solid var(--borde); border-radius: 12px; padding: 12px; text-align: center; }
+.inventario-resumen { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; background: var(--superficie); border: 1px solid var(--borde); border-radius: 12px; padding: 12px; text-align: center; }
 .inventario-resumen strong { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
 .inventario-resumen small { color: var(--suave); font-size: 12px; }
 .inventario-vendidas { margin: -4px 0 10px; font-size: 13px; color: var(--suave); }

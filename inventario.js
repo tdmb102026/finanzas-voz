@@ -3,6 +3,8 @@
 
 const Inventario = (() => {
   const STOCK_MINIMO_DEFAULT = 10;
+  // Tarjetas abiertas: siguen abiertas al repintar.
+  const abiertos = new Set();
 
   async function porNegocio(negocio) {
     const lista = await DB.inventario();
@@ -35,7 +37,7 @@ const Inventario = (() => {
     if (!item) return null;
 
     const ahora = new Date();
-    const fecha = ahora.toISOString().split('T')[0];
+    const fecha = fechaLocal(ahora).slice(0, 10);
     const entrada = { fecha, tipo, cantidad, nota, fuente };
     item.historial.push(entrada);
 
@@ -48,19 +50,15 @@ const Inventario = (() => {
   }
 
   async function pintar(negocio, padre = 'inventario') {
-    console.log(`[Inventario.pintar] negocio=${negocio}, padre=${padre}`);
     await sincronizar(negocio);
     const items = await porNegocio(negocio);
-    console.log(`[Inventario.pintar] items encontrados:`, items.length);
     const $div = $(padre);
     if (!$div) {
-      console.log(`[Inventario.pintar] $div no encontrado para ${padre}`);
       return;
     }
     $div.innerHTML = '';
 
     if (!items.length) {
-      console.log(`[Inventario.pintar] Sin productos para este negocio`);
       $div.innerHTML = '<p style="text-align: center; color: var(--suave);">Sin productos. Agregar uno arriba.</p>';
       return;
     }
@@ -72,28 +70,107 @@ const Inventario = (() => {
     const total = items.reduce((a, x) => a + x.stockActual, 0);
     const vendidasMes = items.reduce((a, x) => a + vendidas(x), 0);
     const bajos = items.filter(x => x.stockActual <= x.stockMinimo);
+    // Plata por producto: ventas menos gastos (envíos, etc.) que nombran el producto. Un combo se reparte por unidades.
+    const plata = {};
+    for (const x of items) plata[x.id] = { ventas: 0, gastos: 0, ventasMes: 0, gastosMes: 0 };
+    for (const m of await DB.todos()) {
+      if ((m.negocio || '') !== negocio || m.estado === 'pendiente' || (m.tipo !== 'ingreso' && m.tipo !== 'gasto')) continue;
+      const dia = String(m.fecha).slice(0, 10);
+      const ps = productosDe(m, items).filter(p => dia >= (p.item.desde || DESDE_ANTIGUO));
+      const unidades = ps.reduce((a, p) => a + p.cantidad, 0);
+      for (const p of ps) {
+        const parte = Math.round((m.monto || 0) * p.cantidad / unidades);
+        const k = m.tipo === 'ingreso' ? 'ventas' : 'gastos';
+        plata[p.item.id][k] += parte;
+        if (dia.startsWith(mes)) plata[p.item.id][k + 'Mes'] += parte;
+      }
+    }
+    const netoMes = items.reduce((a, x) => a + plata[x.id].ventasMes - plata[x.id].gastosMes, 0);
     const $res = document.createElement('div');
     $res.className = 'inventario-resumen';
     $res.innerHTML = `
       <div><strong>${total}</strong><small>unidades en bodega</small></div>
       <div><strong>${vendidasMes}</strong><small>vendidas este mes</small></div>
+      <div><strong>${dinero(netoMes)}</strong><small>ganado este mes</small></div>
       <div><strong class="${bajos.length ? 'stock-bajo' : ''}">${bajos.length}</strong><small>con stock bajo</small></div>`;
     $div.appendChild($res);
+    const $todo = document.createElement('button');
+    $todo.type = 'button';
+    $todo.className = 'inv-todo';
+    $todo.textContent = items.every(x => abiertos.has(x.id)) ? 'Cerrar todos' : 'Abrir todos';
+    $todo.addEventListener('click', () => {
+      const abrir = !items.every(x => abiertos.has(x.id));
+      items.forEach(x => (abrir ? abiertos.add(x.id) : abiertos.delete(x.id)));
+      pintar(negocio, padre);
+    });
+    $div.appendChild($todo);
 
+    const hoy = new Date();
+    const diaStr = d => fechaLocal(d).slice(0, 10);
+    const hace = n => { const d = new Date(hoy); d.setDate(d.getDate() - n); return diaStr(d); };
+    const DIAS_GRAFICO = 14;
     items.forEach(item => {
       const alerta = item.stockActual <= item.stockMinimo;
-      const $card = document.createElement('div');
+      const salidas = item.historial.filter(h => h.tipo === 'venta');
+      const entradas = item.historial.filter(h => h.tipo === 'compra');
+      const salieron = salidas.reduce((a, h) => a + h.cantidad, 0);
+      const entraron = entradas.reduce((a, h) => a + h.cantidad, 0);
+      const tope = Math.max(item.stockInicial + entraron, item.stockActual, 1);
+      const pct = Math.round(item.stockActual / tope * 100);
+      // Ritmo: lo vendido en los últimos 30 días.
+      // Si el inventario empezó hace menos de 30 días, se cuenta desde ahí (mínimo una semana).
+      const desde = item.desde || DESDE_ANTIGUO;
+      const dias = Math.min(30, Math.max(7, Math.round((hoy - new Date(desde + 'T00:00:00')) / 864e5) + 1));
+      const ult30 = salidas.filter(h => h.fecha >= hace(dias - 1)).reduce((a, h) => a + h.cantidad, 0);
+      const porSemana = ult30 / dias * 7;
+      const dura = ult30 ? Math.floor(item.stockActual / (ult30 / dias)) : null;
+      const porDia = [];
+      for (let i = DIAS_GRAFICO - 1; i >= 0; i--) {
+        const f = hace(i);
+        porDia.push({ f, n: salidas.filter(h => h.fecha === f).reduce((a, h) => a + h.cantidad, 0) });
+      }
+      const maxDia = Math.max(3, ...porDia.map(d => d.n));
+      const ultimos = [...item.historial].sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))).slice(0, 5);
+      const pl = plata[item.id];
+      const $card = document.createElement('details');
       $card.className = 'inventario-card' + (alerta ? ' alerta' : '');
+      $card.dataset.id = item.id;
+      $card.open = abiertos.has(item.id);
+      $card.addEventListener('toggle', () => { if ($card.open) abiertos.add(item.id); else abiertos.delete(item.id); });
       $card.innerHTML = `
-        <div class="inventario-header">
-          <span class="inventario-nombre">${escapar(item.nombre)}</span>
-          <span class="inventario-stock${alerta ? ' stock-bajo' : ''}">${item.stockActual} unidades</span>
-        </div>
-        <p class="inventario-vendidas">Vendidas este mes: ${vendidas(item)}</p>
-        <div class="inventario-acciones">
-          <button type="button" class="inv-menos" data-id="${escapar(item.id)}">−</button>
-          <button type="button" class="inv-mas" data-id="${escapar(item.id)}">+</button>
-          <button type="button" class="inv-hist" data-id="${escapar(item.id)}">Historial</button>
+        <summary>
+          <div class="inventario-header">
+            <span class="inventario-nombre">${escapar(item.nombre)}</span>
+            <span class="inventario-stock${alerta ? ' stock-bajo' : ''}"><strong>${item.stockActual}</strong> de ${tope}</span>
+          </div>
+          <div class="inv-barra${alerta ? ' baja' : ''}"><i style="width:${pct}%"></i></div>
+          <p class="inventario-vendidas">Vendidas este mes: ${vendidas(item)} · <b class="inv-plata">${dinero(pl.ventasMes - pl.gastosMes)}</b>${alerta ? ' · ⚠️ stock bajo' : ''}<span class="inv-flecha">›</span></p>
+        </summary>
+        <div class="inv-detalle">
+          <div class="inv-datos">
+            <div><strong>${item.stockInicial}</strong><small>al empezar</small></div>
+            <div><strong>+${entraron}</strong><small>entraron</small></div>
+            <div><strong>−${salieron}</strong><small>salieron</small></div>
+            <div><strong>${porSemana ? porSemana.toFixed(1).replace('.0', '') : '0'}</strong><small>por semana</small></div>
+          </div>
+          <div class="inv-ganancia">
+            <div><small>Este mes</small><span>Ventas <b>${dinero(pl.ventasMes)}</b></span><span>Envíos y gastos <b>−${dinero(pl.gastosMes)}</b></span><span class="neto">Ganaste <b>${dinero(pl.ventasMes - pl.gastosMes)}</b></span></div>
+            <div><small>Desde que empezaste</small><span>Ventas <b>${dinero(pl.ventas)}</b></span><span>Envíos y gastos <b>−${dinero(pl.gastos)}</b></span><span class="neto">Ganaste <b>${dinero(pl.ventas - pl.gastos)}</b></span></div>
+          </div>
+          <p class="nota">${dura === null ? 'Sin ventas en los últimos 30 días.' : `A este ritmo te alcanza para unos <strong>${dura} días</strong>.`}</p>
+          <div class="inv-grafico" aria-label="Ventas de los últimos ${DIAS_GRAFICO} días">
+            ${porDia.map(d => `<span title="${d.f}: ${d.n}"><i style="height:${Math.round(d.n / maxDia * 100)}%"></i>${d.n ? `<b>${d.n}</b>` : ''}</span>`).join('')}
+          </div>
+          <p class="inv-grafico-pie"><span>hace ${DIAS_GRAFICO - 1} días</span><span>hoy</span></p>
+          ${ultimos.length ? `<ul class="inv-ultimos">${ultimos.map(h => `
+            <li><span>${h.tipo === 'compra' ? '📥' : '📤'} ${h.tipo === 'compra' ? '+' : '−'}${h.cantidad}</span>
+              <small>${escapar(h.nota || '')}</small><small>${escapar(String(h.fecha).slice(5).split('-').reverse().join('/'))}</small></li>`).join('')}</ul>`
+            : '<p class="nota">Todavía sin movimientos.</p>'}
+          <div class="inventario-acciones">
+            <button type="button" class="inv-menos" data-id="${escapar(item.id)}">− Salida</button>
+            <button type="button" class="inv-mas" data-id="${escapar(item.id)}">+ Entrada</button>
+            <button type="button" class="inv-hist" data-id="${escapar(item.id)}">Todo</button>
+          </div>
         </div>
       `;
       $div.appendChild($card);
