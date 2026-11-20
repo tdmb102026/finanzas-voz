@@ -1,6 +1,6 @@
 // Anotar con teclado, resumen y presupuesto como el Excel de fer.
 // Montos siempre en centavos de dólar.
-const APP_VERSION = 'v44';
+const APP_VERSION = 'v45';
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
   'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
@@ -1313,6 +1313,12 @@ $('confirmar-reinicio').addEventListener('close', async () => {
 
 // Inventario: solo visible cuando hay negocio activo
 $('nuevo-producto').addEventListener('click', () => Inventario.agregarProducto(estado.espacio));
+$('importar-ventas').addEventListener('click', () => $('ventas-archivo').click());
+$('ventas-archivo').addEventListener('change', e => {
+  const f = e.target.files[0];
+  e.target.value = '';
+  if (f) Inventario.importarVentas(estado.espacio, f);
+});
 
 // Teclado físico (para probar en computadora).
 document.addEventListener('keydown', e => {

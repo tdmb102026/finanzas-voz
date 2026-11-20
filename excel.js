@@ -105,12 +105,13 @@ const Excel = (() => {
     };
   }
 
-  // Columna A de la hoja con ese nombre, fila por fila (texto).
-  async function leerColumna(buffer, nombreHoja) {
+  // Toda una hoja como filas de texto: [['Fecha', 'Monto', …], …]. Sin nombre, la primera hoja.
+  async function leerHoja(buffer, nombreHoja) {
     const leer = await abrirZip(buffer);
     const dom = t => new DOMParser().parseFromString(t, 'application/xml');
     const libro = dom(await leer('xl/workbook.xml'));
-    const hojaEl = [...libro.getElementsByTagName('sheet')].find(h => h.getAttribute('name') === nombreHoja);
+    const hojas = [...libro.getElementsByTagName('sheet')];
+    const hojaEl = nombreHoja ? hojas.find(h => h.getAttribute('name') === nombreHoja) : hojas[0];
     if (!hojaEl) return null;
     const rid = hojaEl.getAttribute('r:id') || hojaEl.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id');
     const rels = dom(await leer('xl/_rels/workbook.xml.rels'));
@@ -119,18 +120,26 @@ const Excel = (() => {
     const hojaXml = dom(await leer('xl/' + destino));
     const compartidos = await leer('xl/sharedStrings.xml');
     const tabla = compartidos ? [...dom(compartidos).getElementsByTagName('si')].map(si => [...si.getElementsByTagName('t')].map(t => t.textContent).join('')) : [];
-    const col = [];
+    const filas = [];
     for (const c of hojaXml.getElementsByTagName('c')) {
-      const ref = c.getAttribute('r') || '';
-      if (!/^A\d+$/.test(ref)) continue;
+      const m = /^([A-Z]+)(\d+)$/.exec(c.getAttribute('r') || '');
+      if (!m) continue;
+      const col = [...m[1]].reduce((a, l) => a * 26 + l.charCodeAt(0) - 64, 0) - 1;
       const t = c.getAttribute('t');
       let val = '';
       if (t === 's') val = tabla[Number(c.getElementsByTagName('v')[0]?.textContent)] || '';
       else if (t === 'inlineStr') val = [...c.getElementsByTagName('t')].map(x => x.textContent).join('');
       else val = c.getElementsByTagName('v')[0]?.textContent || '';
-      col[Number(ref.slice(1)) - 1] = val;
+      const f = Number(m[2]) - 1;
+      (filas[f] = filas[f] || [])[col] = val;
     }
-    return col;
+    return Array.from(filas, f => Array.from(f || [], v => v ?? ''));
+  }
+
+  // Columna A de la hoja con ese nombre, fila por fila (texto).
+  async function leerColumna(buffer, nombreHoja) {
+    const filas = await leerHoja(buffer, nombreHoja);
+    return filas && filas.map(f => f[0] || '');
   }
 
   // ---------- Zip sin compresión ----------
@@ -191,5 +200,6 @@ const Excel = (() => {
     libro: (nombreHoja, filas) => zip(archivos([{ nombre: nombreHoja, filas }])),
     libroVarias: hojas => zip(archivos(hojas)),
     leerColumna,
+    leerHoja,
   };
 })();
