@@ -1,6 +1,6 @@
 // Anotar con teclado, resumen y presupuesto como el Excel de fer.
 // Montos siempre en centavos de dólar.
-const APP_VERSION = 'v47';
+const APP_VERSION = 'v48';
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
   'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
@@ -677,10 +677,13 @@ function pintarConfig() {
   mostrarVersion();
 }
 
+// Chiquito en la esquina de Anotar: la versión y si es la app Android o el navegador.
+$('version-esquina').textContent = `${APP_VERSION} · ${window.AndroidVoz ? 'app' : 'web'}`;
+
 function mostrarVersion() {
   const info = $('version-info');
   if (!info) return;
-  info.innerHTML = `Versión: <strong>${APP_VERSION}</strong> (en tu navegador)`;
+  info.innerHTML = `Versión: <strong>${APP_VERSION}</strong> (${window.AndroidVoz ? 'en la app MIG' : 'en tu navegador'})`;
   // Verificar si hay una versión más nueva disponible
   if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
     navigator.serviceWorker.controller.postMessage({ tipo: 'obtenerVersion' });
