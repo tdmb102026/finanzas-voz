@@ -1014,6 +1014,7 @@ const Inventario = (() => {
     sincronizar,
     combos,
     importarVentas,
+    productosDe,
     cuanto,
     porPartes,
     palabrasLista,
