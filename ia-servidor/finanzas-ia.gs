@@ -243,6 +243,45 @@ function claude_(frase, conceptos, hoy, ejemplos, negocio, deudas, espacios, esp
 }
 
 // ---------- aplicación web ----------
+// ---------- Negocios compartidos ----------
+// Cada teléfono manda lo que cambió en un negocio compartido y recibe lo que cambiaron los demás.
+// Todo queda en la pestaña «Compartido» (una fila por cambio); «desde» es la última fila que el teléfono ya vio.
+const HOJA_SYNC = "Compartido";
+function sync_(persona, q) {
+  const negocio = String(q.negocio || "");
+  if (!/^[\w-]{3,60}$/.test(negocio)) return { ok: false, error: "pedido" };
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let h = ss.getSheetByName(HOJA_SYNC);
+  if (!h) {
+    h = ss.insertSheet(HOJA_SYNC);
+    h.appendRow(["Negocio", "Tabla", "Id", "Cuándo", "Quién", "Datos"]);
+    h.setFrozenRows(1);
+  }
+  const quien = persona || "fer";
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const cambios = (Array.isArray(q.cambios) ? q.cambios : []).slice(0, 400);
+    const filas = cambios.map(c => [negocio, String(c.tabla || "").slice(0, 20), String(c.id || "").slice(0, 80),
+      Number(c.t) || Date.now(), quien, JSON.stringify(c.dato === undefined ? null : c.dato)]).filter(f => f[5].length < 49000);
+    if (filas.length) h.getRange(h.getLastRow() + 1, 1, filas.length, 6).setValues(filas);
+    const desde = Math.max(1, Number(q.desde) || 1);
+    const ultima = h.getLastRow();
+    const salida = [];
+    if (ultima > desde) {
+      h.getRange(desde + 1, 1, ultima - desde, 6).getValues().forEach(v => {
+        if (String(v[0]) !== negocio) return;
+        let dato = null;
+        try { dato = JSON.parse(v[5]); } catch (e) { return; }
+        salida.push({ tabla: v[1], id: String(v[2]), t: Number(v[3]), quien: v[4], dato: dato });
+      });
+    }
+    return { ok: true, hasta: ultima, cambios: salida, yo: quien };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function json_(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
 function doGet() { return json_({ ok: true, servicio: "finanzas-ia" }); }
 // El celular manda { clave, tipo: "probar" | "frase", frase, hoy: "lunes 2026-10-26", conceptos, ejemplos, negocio,
@@ -253,6 +292,7 @@ function doPost(e) {
     const persona = quien_(String(q.clave || ""));
     if (persona === null) return json_({ ok: false, error: "contraseña" });
     if (q.tipo === "probar") return json_({ ok: true });
+    if (q.tipo === "sync") return json_(sync_(persona, q));
     const frase = String(q.frase || "").trim().slice(0, 500);
     const conceptos = conceptos_(q.conceptos);
     if (!frase || !conceptos.length) return json_({ ok: false, error: "pedido" });

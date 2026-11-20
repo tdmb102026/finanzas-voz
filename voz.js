@@ -417,5 +417,5 @@ const Voz = (() => {
   $('bienvenida').addEventListener('close', () => { if (!configurada()) $('bienvenida').showModal(); });
   if (!configurada()) $('bienvenida').showModal();
 
-  return { escuchar, oido, nombreSugerido, sinVozNativa, aprender, procesarPendientes, pintarAjustes, motivo, configurada };
+  return { llamar, escuchar, oido, nombreSugerido, sinVozNativa, aprender, procesarPendientes, pintarAjustes, motivo, configurada };
 })();

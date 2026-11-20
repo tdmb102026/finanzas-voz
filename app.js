@@ -1,6 +1,6 @@
 // Anotar con teclado, resumen y presupuesto como el Excel de fer.
 // Montos siempre en centavos de dólar.
-const APP_VERSION = 'v45';
+const APP_VERSION = 'v46';
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
   'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
@@ -362,7 +362,7 @@ async function pintarMovimientos() {
     const signo = x.tipo === 'ingreso' ? 1 : -1;
     html += `<li><button type="button" class="mov ${x.tipo}" data-id="${x.id}">
       <span class="mov-icono con-bicho">${escapar(c.icono)}${bicho(animal(c))}</span>
-      <span class="mov-texto"><strong>${escapar(c.nombre)}</strong><small>${escapar(c.categoria)}${x.nota ? ' · ' + escapar(x.nota) : ''}</small></span>
+      <span class="mov-texto"><strong>${escapar(c.nombre)}</strong><small>${x._quien && x._quien !== Sync.yo() ? `<b class="mov-quien">${escapar(x._quien)}</b> · ` : ''}${escapar(c.categoria)}${x.nota ? ' · ' + escapar(x.nota) : ''}</small></span>
       <span class="mov-monto">${dinero(signo * x.monto)}<small>${x.fecha.slice(11, 16)}</small></span>
     </button></li>`;
   }
@@ -673,6 +673,7 @@ async function pintarAjustes() {
 function pintarConfig() {
   Voz.pintarAjustes();
   pintarNegocios();
+  Sync.pintarPanel();
   mostrarVersion();
 }
 
