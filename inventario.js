@@ -616,21 +616,32 @@ const Inventario = (() => {
   // "Bull doser", "buldozer" y "bulldozer" quedan iguales: sin tildes, espacios ni letras repetidas, z = s.
   const plano = t => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/z/g, 's').replace(/[^a-z0-9]/g, '').replace(/(.)\1+/g, '$1');
-  const raiz = item => plano(item.nombre.toLowerCase().split(/\s+/)[0]).slice(0, 6);
+  // La palabra que distingue al producto: la primera de su nombre que no tienen los demás
+  // ("Emblema Japón" y "Emblema Alemania" → "japon" y "aleman"; "Excavadora RC" → "excava").
+  const palabrasNombre = item => item.nombre.toLowerCase().split(/\s+/).map(w => plano(w).slice(0, 6)).filter(w => w.length >= 2);
+  function raiz(item, items = []) {
+    const ws = palabrasNombre(item);
+    const otros = new Set(items.filter(x => x.id !== item.id).flatMap(palabrasNombre));
+    return ws.find(w => !otros.has(w)) || ws[0] || '';
+  }
 
   const palabrasDe = texto => String(texto).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9]+/);
   // La cantidad es la palabra antes del producto: "dos excavadoras" = 2; si no dice, 1.
-  function numeroAntes(palabras, i) {
-    const antes = palabras[i - 1];
+  // Se salta "de", "el"… y las otras palabras del nombre: "2 emblemas de Japón" = 2.
+  function numeroAntes(palabras, i, saltar = []) {
+    let k = i - 1;
+    while (k > 0 && (['de', 'del', 'la', 'el', 'los', 'las'].includes(palabras[k]) || saltar.some(r => plano(palabras[k]).startsWith(r.slice(0, 5))))) k--;
+    const antes = palabras[k];
     if (antes && NUMEROS[antes]) return NUMEROS[antes];
     if (antes && /^\d{1,3}$/.test(antes)) return Number(antes);
     return 1;
   }
 
-  function cantidadEn(texto, item) {
+  function cantidadEn(texto, item, items) {
     const palabras = palabrasDe(texto);
-    const r = raiz(item);
-    return numeroAntes(palabras, palabras.findIndex((w, k) => plano(w).startsWith(r) || plano(w + (palabras[k + 1] || '')).startsWith(r)));
+    const r = raiz(item, items);
+    const i = palabras.findIndex((w, k) => plano(w).startsWith(r) || plano(w + (palabras[k + 1] || '')).startsWith(r));
+    return i < 0 ? 1 : numeroAntes(palabras, i, palabrasNombre(item).filter(w => w !== r));
   }
 
   // ---------- Combos ----------
@@ -691,7 +702,7 @@ const Inventario = (() => {
         }
         if (!n) n = sueltas;
       }
-      if (!n && t.includes(raiz(item))) n = cantidadEn(texto, item) * p;
+      if (!n && t.includes(raiz(item, items))) n = cantidadEn(texto, item, items) * p;
       if (n) out.push({ item, cantidad: n });
     }
     return out;
@@ -782,6 +793,213 @@ const Inventario = (() => {
     if (bajos.length) avisar(`⚠️ Stock bajo: ${bajos.map(b => `${b.nombre} (${cuanto(b, b.stockActual)})`).join(', ')}`, null, 5000);
   }
 
+  // ---------- Importar ventas de un Excel (o CSV) ----------
+  // Lee una hoja de ventas (precio, descripción, cantidad y, si hay, fecha), arma los productos
+  // que nombra y anota cada venta en el negocio. Volver a importar la misma hoja no duplica.
+  const RELLENO = ['de', 'del', 'el', 'la', 'los', 'las', 'y', 'un', 'una', 'en', 'con', 'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  const aNumero = v => {
+    const t = String(v ?? '').replace(/[$\s]/g, '');
+    if (!t) return NaN;
+    return Number(t.includes('.') ? t.replace(/,/g, '') : t.replace(',', '.'));
+  };
+
+  function leerCSV(texto) {
+    const sep = (texto.split('\n')[0].match(/;/g) || []).length > (texto.split('\n')[0].match(/,/g) || []).length ? ';' : ',';
+    return texto.split(/\r?\n/).map(linea => {
+      const celdas = [];
+      let cur = '', comillas = false;
+      for (const ch of linea) {
+        if (ch === '"') comillas = !comillas;
+        else if (ch === sep && !comillas) { celdas.push(cur); cur = ''; } else cur += ch;
+      }
+      celdas.push(cur);
+      return celdas;
+    });
+  }
+
+  function fechaDe(v) {
+    const t = String(v || '').trim();
+    if (/^\d{5}(\.\d+)?$/.test(t)) return fechaLocal(new Date(Date.UTC(1899, 11, 30) + Math.floor(Number(t)) * 864e5 + 12 * 36e5)).slice(0, 10);
+    let m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(t);
+    if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+    m = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})/.exec(t);
+    if (m) return `${m[3].length === 2 ? '20' + m[3] : m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+    return '';
+  }
+
+  function analizarVentas(filas) {
+    const texto = v => String(v ?? '').trim();
+    const ini = filas.findIndex(f => f && f.filter(v => texto(v) && isNaN(aNumero(v))).length >= 2);
+    if (ini < 0) throw new Error('No encontré los títulos de las columnas');
+    const cab = filas[ini].map(v => plano(v));
+    const datos = filas.slice(ini + 1).filter(f => f && f.some(v => texto(v)));
+    const busca = re => cab.findIndex(h => re.test(h));
+    const colCant = busca(/^cant/);
+    const colDesc = busca(/descri|detal|product|articul|concept|nota/);
+    const colFecha = busca(/fecha|^dia/);
+    const usadas = [colCant, colDesc, colFecha];
+    const numericas = cab.map((_, k) => (usadas.includes(k) ? -1 : datos.filter(f => aNumero(f[k]) > 0).length));
+    let colMonto = busca(/monto|precio|valor|importe|cobr|pago|venta/);
+    const mejor = numericas.indexOf(Math.max(...numericas));
+    if (colMonto < 0 || numericas[colMonto] < numericas[mejor] / 2) colMonto = mejor;
+    if (colMonto < 0 || colDesc < 0) throw new Error('No encontré las columnas de precio y descripción');
+    const ventas = datos.map((f, k) => ({ fila: ini + 2 + k, monto: aNumero(f[colMonto]), desc: texto(f[colDesc]),
+      cantidad: colCant >= 0 ? Math.max(1, Math.round(aNumero(f[colCant])) || 1) : null, fecha: colFecha >= 0 ? fechaDe(f[colFecha]) : '' }))
+      .filter(v => v.monto > 0);
+    // Palabra de tipo ("Emblema"): la primera palabra más común; se quita del nombre del producto.
+    const primeras = {};
+    for (const v of ventas) {
+      const w = palabrasDe(v.desc).find(x => x && !/^\d+$/.test(x));
+      if (w) primeras[plano(w).slice(0, 5)] = (primeras[plano(w).slice(0, 5)] || 0) + 1;
+    }
+    const [tipoClave, tipoN] = Object.entries(primeras).sort((a, b) => b[1] - a[1])[0] || ['', 0];
+    const tipo = tipoN >= ventas.length * 0.4 ? tipoClave : '';
+    const esTipo = w => tipo && plano(w).startsWith(tipo);
+    const grupos = new Map();
+    for (const v of ventas) {
+      const orig = v.desc.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+      const ws = orig.map(w => w.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''));
+      const encontrados = [];
+      ws.forEach((w, i) => {
+        if (/^\d+$/.test(w) || NUMEROS[w] || RELLENO.includes(w) || esTipo(w) || plano(w).length < 2) return;
+        let k = i - 1;
+        while (k >= 0 && RELLENO.includes(ws[k])) k--;
+        const antes = ws[k];
+        // Tras "emblema" es producto; tras un número solo si la fila habla del tipo ("2 emblemas Japón 1 de EEUU"),
+        // así "venta 4 noviembre" no crea el producto "Noviembre".
+        const tieneTipo = !tipo || ws.some(esTipo);
+        const fuerte = antes !== undefined && (esTipo(antes) || (tieneTipo && (/^\d+$/.test(antes) || NUMEROS[antes])));
+        if (!fuerte && i !== 0) return;
+        let q = null;
+        let j = k;
+        while (j >= 0 && (esTipo(ws[j]) || RELLENO.includes(ws[j]))) j--;
+        if (ws[j] && /^\d{1,3}$/.test(ws[j])) q = Number(ws[j]);
+        else if (ws[j] && NUMEROS[ws[j]]) q = NUMEROS[ws[j]];
+        else if (ws[i + 1] && /^\d{1,3}$/.test(ws[i + 1])) q = Number(ws[i + 1]);
+        encontrados.push({ clave: plano(w).slice(0, 3), palabra: orig[i], q, fuerte });
+      });
+      const unicos = [...new Map(encontrados.map(e => [e.clave, e])).values()];
+      v.partes = unicos.map(e => ({ clave: e.clave, cantidad: unicos.length === 1 ? (v.cantidad || e.q || 1) : (e.q || 1) }));
+      for (const e of unicos) {
+        const g = grupos.get(e.clave) || { clave: e.clave, formas: {}, fuerte: false, vendidos: 0, ventas: 0 };
+        g.formas[e.palabra] = (g.formas[e.palabra] || 0) + 1;
+        g.fuerte = g.fuerte || e.fuerte;
+        g.vendidos += v.partes.find(p => p.clave === e.clave).cantidad;
+        g.ventas++;
+        grupos.set(e.clave, g);
+      }
+    }
+    const tipoNombre = (() => {
+      const formas = {};
+      for (const v of ventas) for (const w of v.desc.split(/[^\p{L}]+/u)) if (esTipo(w)) formas[w] = (formas[w] || 0) + 1;
+      const w = Object.keys(formas).sort((a, b) => a.length - b.length || formas[b] - formas[a])[0] || '';
+      return w ? w[0].toUpperCase() + w.slice(1).toLowerCase() : '';
+    })();
+    for (const g of grupos.values()) {
+      const formas = Object.entries(g.formas).sort((a, b) => b[1] - a[1]);
+      const conTilde = formas.find(([w]) => /[áéíóúñ]/i.test(w) && plano(w) === plano(formas[0][0]));
+      let w = (conTilde || formas[0])[0];
+      if (w === w.toLowerCase()) w = w[0].toUpperCase() + w.slice(1);
+      g.nombre = (tipoNombre ? tipoNombre + ' ' : '') + w;
+    }
+    return { ventas, grupos: [...grupos.values()].sort((a, b) => b.vendidos - a.vendidos), colFecha: colFecha >= 0,
+      columnas: { monto: filas[ini][colMonto], desc: filas[ini][colDesc], cant: colCant >= 0 ? filas[ini][colCant] : '' } };
+  }
+
+  async function importarVentas(negocio, archivo) {
+    let a;
+    try {
+      const filas = /\.csv$/i.test(archivo.name) ? leerCSV(await archivo.text()) : await Excel.leerHoja(await archivo.arrayBuffer());
+      a = analizarVentas(filas || []);
+    } catch (e) {
+      avisar('No se pudo leer: ' + (e.message || 'archivo raro'), null, 6000);
+      return;
+    }
+    if (!a.ventas.length) { avisar('No encontré ventas en ese archivo', null, 5000); return; }
+    const items = await porNegocio(negocio);
+    for (const g of a.grupos) g.existe = items.find(i => palabrasNombre(i).some(w => w.startsWith(g.clave)));
+    const total = a.ventas.reduce((s, v) => s + v.monto, 0);
+    const hoy = fechaLocal().slice(0, 10);
+    const $o = document.createElement('div');
+    $o.className = 'modal-overlay';
+    document.body.appendChild($o);
+    $o.innerHTML = `
+      <form class="modal inv-importar">
+        <h2>📥 Importar ventas</h2>
+        <p class="nota">Encontré <b>${a.ventas.length} ventas</b> por <b>${dinero(Math.round(total * 100))}</b>.
+          Precio: «${escapar(a.columnas.monto)}», descripción: «${escapar(a.columnas.desc)}»${a.columnas.cant ? `, cantidad: «${escapar(a.columnas.cant)}»` : ''}.</p>
+        ${a.colFecha ? '<p class="nota">Las fechas salen de la hoja.</p>' : `<label>¿Qué día anoto estas ventas?<input type="date" name="fecha" value="${hoy}" max="${hoy}"></label>`}
+        <h3>Productos</h3>
+        <p class="nota">Marca los que son productos de verdad. A los nuevos dime cuántos te quedan hoy: el stock inicial será eso más lo vendido.</p>
+        <div class="imp-lista">${a.grupos.map((g, k) => `
+          <div class="imp-fila">
+            <label class="imp-marca"><input type="checkbox" name="usar${k}" ${g.fuerte || g.existe ? 'checked' : ''}></label>
+            <div class="imp-datos">
+              ${g.existe ? `<strong>${escapar(g.existe.nombre)}</strong><small>ya está · quedan ${escapar(cuanto(g.existe, g.existe.stockActual))}</small>`
+                : `<input name="nombre${k}" value="${escapar(g.nombre)}" maxlength="40">`}
+              <small>${g.vendidos} vendidos en ${g.ventas} venta${g.ventas === 1 ? '' : 's'}</small>
+            </div>
+            ${g.existe ? '' : `<label class="imp-quedan">Quedan<input type="number" name="quedan${k}" min="0" step="1" inputmode="numeric" value="0"></label>`}
+          </div>`).join('')}</div>
+        <p class="nota" id="imp-sin"></p>
+        <div class="editor-botones">
+          <button type="button" value="no">Cancelar</button>
+          <button type="submit" class="principal">Importar</button>
+        </div>
+      </form>`;
+    const f = $o.querySelector('form');
+    const usar = () => a.grupos.filter((g, k) => f[`usar${k}`].checked);
+    const pintarSin = () => {
+      const claves = new Set(usar().map(g => g.clave));
+      const sin = a.ventas.filter(v => !v.partes.some(p => claves.has(p.clave)));
+      $o.querySelector('#imp-sin').textContent = sin.length
+        ? `${sin.length} venta${sin.length === 1 ? '' : 's'} sin producto (por ejemplo «${sin[0].desc || 'sin descripción'}»): se anotan igual como venta, sin tocar el stock.` : '';
+    };
+    f.addEventListener('change', pintarSin);
+    pintarSin();
+    const ok = await new Promise(r => {
+      $o.querySelector('[value=no]').addEventListener('click', () => r(false));
+      f.addEventListener('submit', e => { e.preventDefault(); r(true); });
+    });
+    const fechaElegida = (f.fecha && f.fecha.value) || hoy;
+    const elegidos = usar().map(g => ({ g, k: a.grupos.indexOf(g) }));
+    $o.remove();
+    if (!ok) return;
+
+    const conceptos = (await DB.conceptos()).filter(c => (c.negocio || '') === negocio && c.tipo === 'ingreso' && !c.oculto);
+    const concepto = conceptos.find(c => /venta/i.test(c.nombre) || /ventas$/.test(c.id)) || conceptos[0];
+    if (!concepto) { avisar('Este negocio no tiene un concepto de ventas', null, 5000); return; }
+    const fechas = a.ventas.map(v => v.fecha || fechaElegida).sort();
+    const desde = fechas[0] || fechaElegida;
+    // Productos: los nuevos se crean con stock inicial = quedan + vendidos.
+    const producto = {};
+    for (const { g, k } of elegidos) {
+      if (g.existe) {
+        if ((g.existe.desde || DESDE_ANTIGUO) > desde) { g.existe.desde = desde; await DB.guardarInventario(g.existe); }
+        producto[g.clave] = g.existe;
+        continue;
+      }
+      const nombre = (f[`nombre${k}`].value || g.nombre).trim();
+      const quedan = Math.max(0, parseInt(f[`quedan${k}`].value, 10) || 0);
+      const it = await crear(negocio, nombre, quedan + g.vendidos);
+      it.desde = desde;
+      await DB.guardarInventario(it);
+      producto[g.clave] = it;
+    }
+    const hash = t => { let h = 0; for (const ch of t) h = (h * 31 + ch.charCodeAt(0)) | 0; return (h >>> 0).toString(36); };
+    const ahora = new Date().toISOString();
+    for (const v of a.ventas) {
+      const partes = v.partes.filter(p => producto[p.clave]);
+      const nota = partes.length ? partes.map(p => `${p.cantidad} ${producto[p.clave].nombre}`).join(' y ') : v.desc;
+      await DB.guardar({ id: 'imp-' + hash(`${negocio}|${v.fila}|${v.desc}|${v.monto}`), tipo: 'ingreso', monto: Math.round(v.monto * 100), moneda: 'USD',
+        concepto: concepto.id, fecha: `${v.fecha || fechaElegida}T12:00:00`, nota, frase: '', original: v.desc, negocio,
+        estado: 'listo', ms: null, creado: ahora, editado: ahora, importado: true });
+    }
+    await sincronizar(negocio);
+    avisar(`Importadas ${a.ventas.length} ventas y ${elegidos.length} productos ✓`, null, 5000);
+    repintar();
+  }
+
   return {
     crear,
     registrarMovimiento,
@@ -791,6 +1009,7 @@ const Inventario = (() => {
     inicializarImportCap,
     sincronizar,
     combos,
+    importarVentas,
     cuanto,
     porPartes,
     palabrasLista,
