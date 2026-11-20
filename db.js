@@ -124,32 +124,53 @@ const DB = (() => {
     });
   }
 
+  // Cada cambio se avisa (para mandar a los negocios compartidos). `_t` = cuándo se cambió.
+  const escuchas = [];
+  const avisarCambio = (tabla, x, borrado) => escuchas.forEach(f => { try { f(tabla, x, borrado); } catch { /* nada */ } });
+  async function poner(tabla, x) {
+    x._t = Date.now();
+    const r = await operar(tabla, 'readwrite', t => t.put(x));
+    avisarCambio(tabla, x, false);
+    return r;
+  }
+  async function quitar(tabla, id) {
+    const x = await operar(tabla, 'readonly', t => t.get(id));
+    const r = await operar(tabla, 'readwrite', t => t.delete(id));
+    if (x) avisarCambio(tabla, x, true);
+    return r;
+  }
+
   return {
+    alCambiar: f => escuchas.push(f),
+    uno: (tabla, id) => operar(tabla, 'readonly', t => t.get(id)),
+    // Sin avisar: lo que llega de otro teléfono.
+    ponerSinAviso: (tabla, x) => operar(tabla, 'readwrite', t => t.put(x)),
+    quitarSinAviso: (tabla, id) => operar(tabla, 'readwrite', t => t.delete(id)),
     TABLAS: ['movimientos', 'conceptos', 'negocios', 'deudas', 'inventario'],
     todosDe: tabla => operar(tabla, 'readonly', t => t.getAll()),
     // Cambia toda una tabla por la lista (para Importar respaldo).
     reemplazar: (tabla, lista) => operar(tabla, 'readwrite', t => { t.clear(); lista.forEach(x => t.put(x)); }),
-    guardar: mov => operar('movimientos', 'readwrite', t => t.put(mov)),
-    borrar: id => operar('movimientos', 'readwrite', t => t.delete(id)),
+    guardar: mov => poner('movimientos', mov),
+    borrar: id => quitar('movimientos', id),
     // Movimientos con fecha en [desde, hasta), fechas ISO.
     entre: (desde, hasta) => operar('movimientos', 'readonly', t =>
       t.index('fecha').getAll(IDBKeyRange.bound(desde, hasta, false, true))),
     todos: () => operar('movimientos', 'readonly', t => t.getAll()),
     borrarTodos: () => operar('movimientos', 'readwrite', t => t.clear()),
     conceptos: () => operar('conceptos', 'readonly', t => t.getAll()),
-    guardarConcepto: c => operar('conceptos', 'readwrite', t => t.put(c)),
-    borrarConcepto: id => operar('conceptos', 'readwrite', t => t.delete(id)),
+    guardarConcepto: c => poner('conceptos', c),
+    borrarConcepto: id => quitar('conceptos', id),
     negocios: () => operar('negocios', 'readonly', t => t.getAll()),
-    guardarNegocio: n => operar('negocios', 'readwrite', t => t.put(n)),
-    borrarNegocio: id => operar('negocios', 'readwrite', t => t.delete(id)),
+    guardarNegocio: n => poner('negocios', n),
+    borrarNegocio: id => quitar('negocios', id),
     // Deuda: { id, persona, sentido: 'medeben' | 'debo', monto, abonos: [{ fecha, monto }], fecha, nota, negocio }
     deudas: () => operar('deudas', 'readonly', t => t.getAll()),
-    guardarDeuda: d => operar('deudas', 'readwrite', t => t.put(d)),
-    borrarDeuda: id => operar('deudas', 'readwrite', t => t.delete(id)),
+    guardarDeuda: d => poner('deudas', d),
+    borrarDeuda: id => quitar('deudas', id),
     // Inventario: { id, nombre, negocio, stockActual, stockInicial, stockMinimo, historial: [{fecha, tipo, cantidad, nota, fuente}] }
     inventario: () => operar('inventario', 'readonly', t => t.getAll()),
-    guardarInventario: i => operar('inventario', 'readwrite', t => t.put(i)),
-    borrarInventario: id => operar('inventario', 'readwrite', t => t.delete(id)),
+    guardarInventario: i => poner('inventario', i),
+    borrarInventario: id => quitar('inventario', id),
     // Conceptos que trae un negocio nuevo: lo que suele pasar en un negocio pequeño de ventas.
     conceptosNegocio: (negocio, orden) => [
       ['ventas', 'Ventas', 'ingreso', 'Ventas', '💵'],

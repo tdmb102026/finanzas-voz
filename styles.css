@@ -766,3 +766,11 @@ body.mes-pasado .mes-mini h1 { color: var(--acento); }
 .imp-fila .imp-quedan { margin: 0; width: 76px; font-size: 13px; color: var(--suave); }
 .imp-quedan input { padding: 6px; width: 100%; }
 .modal .inv-importar .editor-botones button, .inv-importar .editor-botones button { margin: 0; }
+.comp-fila { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--borde); }
+.comp-datos { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.comp-datos small { color: var(--suave); }
+.comp-fila button, .comp-acciones button { padding: 7px 10px; font-size: 13px; font-weight: 600; border-radius: 10px; border: 1px solid var(--borde); background: var(--superficie); color: var(--texto); }
+.comp-acciones { display: flex; gap: 8px; margin-top: 10px; }
+.comp-acciones button { flex: 1; }
+.comp-codigo { font: 700 20px ui-monospace, monospace; text-align: center; padding: 12px; border: 2px dashed var(--acento); border-radius: 12px; user-select: all; word-break: break-all; }
+.mov-quien { color: var(--acento); font-weight: 600; }

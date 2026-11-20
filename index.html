@@ -127,6 +127,12 @@
       </section>
 
       <section class="tarjeta">
+        <h2>👥 Negocios compartidos</h2>
+        <p class="nota arriba">Comparte un negocio con otra persona (por ejemplo tu socio): lo que anota uno le aparece al otro, con ventas, conceptos, inventario y combos.</p>
+        <div id="compartidos"></div>
+      </section>
+
+      <section class="tarjeta">
         <h2>Respaldo</h2>
         <p class="nota arriba">El Excel trae tus movimientos, el inventario y una hoja «Respaldo» con todo lo de la app. Con «Importar» cargas ese Excel aquí o en otro celular. «Imagen» guarda el resumen del espacio que estás viendo (Personal o el negocio de arriba).</p>
         <div class="respaldo-botones">
@@ -467,6 +473,18 @@
     </form>
   </dialog>
 
+  <dialog id="comp-dialogo">
+    <form method="dialog" id="comp-form">
+      <h2 id="comp-titulo"></h2>
+      <div id="comp-cuerpo"></div>
+      <input name="codigo" autocomplete="off" placeholder="Código del negocio" hidden>
+      <div class="editor-botones">
+        <button type="button" id="comp-copiar" hidden>Copiar código</button>
+        <button value="listo" class="principal">Listo</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="respaldo-confirmar">
     <form method="dialog">
       <h2>¿Cargar este respaldo?</h2>
@@ -492,6 +510,7 @@
   <script src="db.js"></script>
   <script src="excel.js"></script>
   <script src="respaldo.js"></script>
+  <script src="sync.js"></script>
   <script src="graficos.js"></script>
   <script src="app.js"></script>
   <script src="cuentas.js"></script>

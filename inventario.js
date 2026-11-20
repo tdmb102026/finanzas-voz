@@ -347,6 +347,7 @@ const Inventario = (() => {
       if (!h || h.mov || h.cantidad !== 1) return;
       item.historial.pop();
       item.stockActual += h.tipo === 'venta' ? 1 : -1;
+      if (h.hid) item.quitados = [...(item.quitados || []), h.hid];
       await DB.guardarInventario(item);
       repintar();
     });
@@ -527,6 +528,7 @@ const Inventario = (() => {
       item.historial.splice(k, 1);
       item.stockActual += h.tipo === 'compra' ? -h.cantidad : h.cantidad;
       if (h.mov) item.ignorados = [...(item.ignorados || []), h.mov];
+      if (h.hid) item.quitados = [...(item.quitados || []), h.hid]; // para que el otro teléfono también lo quite
       await DB.guardarInventario(item);
     });
     cola = r.catch(() => {});
@@ -652,6 +654,8 @@ const Inventario = (() => {
   }
   function guardarCombos(negocio, lista) {
     localStorage.setItem(claveCombos(negocio), JSON.stringify(lista));
+    localStorage.setItem(claveCombos(negocio) + '-t', String(Date.now()));
+    window.dispatchEvent(new CustomEvent('combos', { detail: negocio }));
   }
   // Lo que se dice del combo: el nombre entero, o sin la palabra "combo" ("combo obra" → "obra").
   function formasCombo(c) {
