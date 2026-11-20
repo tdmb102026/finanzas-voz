@@ -777,3 +777,5 @@ body.mes-pasado .mes-mini h1 { color: var(--acento); }
 .inv-importar label.imp-fila { display: flex; margin: 0; }
 .inv-importar > label input { display: block; width: 100%; margin-top: 4px; padding: 10px; font-size: 16px; border: 1px solid var(--borde); border-radius: 10px; background: var(--fondo); color: var(--texto); }
 .modal.inv-importar .editor-botones button:not(.principal) { background: var(--superficie); color: var(--texto); border: 1px solid var(--borde); }
+#vista-anotar { position: relative; }
+.version-esquina { position: absolute; top: 1px; right: 10px; color: var(--suave); font-size: 10px; opacity: .7; pointer-events: none; }
