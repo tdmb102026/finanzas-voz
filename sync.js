@@ -7,8 +7,11 @@ const Sync = (() => {
   const TABLAS = ['negocios', 'conceptos', 'movimientos', 'inventario', 'deudas'];
   const leerJSON = (k, def) => { try { return JSON.parse(localStorage.getItem(k) || '') || def; } catch { return def; } };
   const escribirJSON = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* sin almacenamiento */ } };
+  // Cada compartido: { desde, ultima, personas, local (negocio de este teléfono), grupo (solo algunos productos), nombre }.
+  // El código de un negocio entero es su id; el de un grupo de productos empieza con "g".
   const compartidos = () => leerJSON(CLAVE, {});
-  const esCompartido = id => !!(id && compartidos()[id]);
+  const localDe = (code, c) => (c.grupo ? c.local || '' : c.local || code);
+  const esCompartido = id => !!(id && Object.entries(compartidos()).some(([code, c]) => !c.grupo && localDe(code, c) === id));
   let yo = localStorage.getItem('sync-yo') || '';
   let enCurso = null, pendiente = false, temporizador = null, ultimoError = '';
 
@@ -19,19 +22,53 @@ const Sync = (() => {
     return { ...x, historial: (x.historial || []).filter(h => !h.mov || h.editado) };
   }
 
-  function encolar(tabla, x, borrado) {
+  // A qué compartido va un registro (código) o null.
+  function compartidoDe(tabla, x) {
+    const lista = compartidos();
+    if ((tabla === 'inventario' || tabla === 'movimientos') && x.grupo && lista[x.grupo]) return x.grupo;
     const neg = negocioDe(tabla, x);
-    if (!esCompartido(neg)) return;
-    const cola = leerJSON(COLA, []).filter(c => !(c.tabla === tabla && c.id === x.id));
-    cola.push({ negocio: neg, tabla, id: x.id, t: x._t || Date.now(), dato: borrado ? null : paraMandar(tabla, x) });
+    if (!neg) return null;
+    return Object.keys(lista).find(code => !lista[code].grupo && localDe(code, lista[code]) === neg) || null;
+  }
+
+  function meterEnCola(code, tabla, x, borrado) {
+    const c = compartidos()[code];
+    let dato = borrado ? null : paraMandar(tabla, x);
+    // En un grupo el negocio de cada teléfono es otro: viaja sin negocio y cada uno pone el suyo.
+    if (dato && c && c.grupo && tabla !== 'grupo') dato = { ...dato, negocio: '' };
+    const cola = leerJSON(COLA, []).filter(k => !(k.tabla === tabla && k.id === x.id && k.negocio === code));
+    cola.push({ negocio: code, tabla, id: x.id, t: x._t || Date.now(), dato });
     escribirJSON(COLA, cola);
     programar(1500);
   }
 
+  // Una venta de un negocio con productos compartidos va al grupo si nombra uno de esos productos.
+  async function grupoDeVenta(x) {
+    const lista = compartidos();
+    const grupos = Object.keys(lista).filter(code => lista[code].grupo && lista[code].local && lista[code].local === (x.negocio || ''));
+    if (!grupos.length) return null;
+    const items = (await DB.inventario()).filter(i => i.negocio === x.negocio);
+    for (const code of grupos) {
+      const suyos = items.filter(i => i.grupo === code);
+      if (suyos.length && Inventario.productosDe(x, items).some(p => p.item.grupo === code)) return code;
+    }
+    return null;
+  }
+
+  async function encolar(tabla, x, borrado) {
+    let code = compartidoDe(tabla, x);
+    if (!code && tabla === 'movimientos' && !borrado) {
+      code = await grupoDeVenta(x);
+      if (code) { x.grupo = code; await DB.ponerSinAviso('movimientos', x); }
+    }
+    if (code) meterEnCola(code, tabla, x, borrado);
+  }
+
   function encolarCombos(neg) {
     if (!esCompartido(neg)) return;
-    const cola = leerJSON(COLA, []).filter(c => !(c.tabla === 'combos' && c.negocio === neg));
-    cola.push({ negocio: neg, tabla: 'combos', id: 'combos-' + neg, t: Number(localStorage.getItem(`inv-combos-${neg}-t`)) || Date.now(),
+    const code = compartidoDe('negocios', { id: neg });
+    const cola = leerJSON(COLA, []).filter(c => !(c.tabla === 'combos' && c.negocio === code));
+    cola.push({ negocio: code, tabla: 'combos', id: 'combos-' + neg, t: Number(localStorage.getItem(`inv-combos-${neg}-t`)) || Date.now(),
       dato: Inventario.combos(neg) });
     escribirJSON(COLA, cola);
     programar(1500);
@@ -66,9 +103,46 @@ const Sync = (() => {
     return item;
   }
 
-  async function aplicar(neg, cambios) {
+  // Al unirse a un grupo, sus productos van a un negocio nuevo con el nombre del grupo.
+  async function negocioParaGrupo(code, nombre) {
+    const negs = await DB.negocios();
+    const ya = negs.find(n => n.nombre.toLowerCase() === nombre.toLowerCase());
+    if (ya) return ya.id;
+    if (negs.length >= 3) return '';
+    const n = { id: 'n' + Date.now().toString(36), nombre: nombre.slice(0, 30), orden: negs.length, personaje: 'oso' };
+    await DB.ponerSinAviso('negocios', n);
+    const total = (await DB.conceptos()).length;
+    for (const c of DB.conceptosNegocio(n.id, total)) await DB.ponerSinAviso('conceptos', c);
+    return n.id;
+  }
+
+  async function aplicar(code, cambios) {
     let hubo = false;
+    const lista = compartidos();
+    const sh = lista[code] || {};
+    const neg = localDe(code, sh);
+    if (sh.grupo) {
+      const meta = cambios.filter(c => c.tabla === 'grupo').pop();
+      if (meta && meta.dato) sh.nombre = meta.dato.nombre || sh.nombre;
+      if (!sh.local && sh.nombre) { sh.local = await negocioParaGrupo(code, sh.nombre); hubo = true; }
+      lista[code] = sh;
+      escribirJSON(CLAVE, lista);
+      if (!sh.local) return false;
+    }
+    const conceptosLocales = sh.grupo ? (await DB.conceptos()).filter(c => c.negocio === sh.local && !c.oculto) : [];
+    // El concepto del otro teléfono puede no existir aquí: se usa uno del mismo tipo (ventas para ingresos).
+    const conceptoLocal = async (id, tipo) => {
+      if (await DB.uno('conceptos', id)) return id;
+      const mismos = conceptosLocales.filter(c => c.tipo === tipo);
+      return ((tipo === 'ingreso' && mismos.find(c => /venta/i.test(c.nombre))) || mismos[0] || {}).id || id;
+    };
     for (const c of cambios) {
+      if (c.tabla === 'grupo') continue;
+      if (sh.grupo && c.dato) {
+        c.dato = { ...c.dato, negocio: sh.local, grupo: code };
+        if (c.tabla === 'movimientos') c.dato.concepto = await conceptoLocal(c.dato.concepto, c.dato.tipo);
+        if (!['movimientos', 'inventario'].includes(c.tabla)) continue;
+      }
       if (c.tabla === 'combos') {
         const k = `inv-combos-${neg}`;
         if ((Number(localStorage.getItem(k + '-t')) || 0) < c.t) {
@@ -107,7 +181,7 @@ const Sync = (() => {
       for (const neg of ids) {
         const cola = leerJSON(COLA, []);
         const mios = cola.filter(c => c.negocio === neg);
-        const r = await Voz.llamar({ tipo: 'sync', negocio: neg, desde: lista[neg].desde || 1,
+        const r = await Voz.llamar({ tipo: 'sync', negocio: neg, desde: (compartidos()[neg] || lista[neg]).desde || 1,
           cambios: mios.map(c => ({ tabla: c.tabla, id: c.id, t: c.t, dato: c.dato })) });
         if (!r || !r.ok) {
           ultimoError = !r || r.error === 'sin-red' ? 'No se pudo conectar.' : r.error === 'contraseña' ? 'La contraseña no sirve en este servidor.'
@@ -127,7 +201,7 @@ const Sync = (() => {
         if (yo) personas.add(yo);
         ahora[neg] = { ...ahora[neg], desde: r.hasta || ahora[neg].desde, ultima: new Date().toISOString(), personas: [...personas] };
         escribirJSON(CLAVE, ahora);
-        if (cambio) await Inventario.sincronizar(neg);
+        if (cambio && localDe(neg, ahora[neg])) await Inventario.sincronizar(localDe(neg, ahora[neg]));
       }
       if (cambio && typeof cargarConceptos === 'function') {
         await cargarConceptos();
@@ -145,7 +219,7 @@ const Sync = (() => {
   // Empezar a compartir un negocio: manda todo lo que tiene.
   async function compartir(neg) {
     const lista = compartidos();
-    if (!lista[neg]) lista[neg] = { desde: 1, personas: [] };
+    if (!lista[neg]) lista[neg] = { desde: 1, personas: [], local: neg };
     escribirJSON(CLAVE, lista);
     for (const t of TABLAS) {
       for (const x of await DB.todosDe(t)) if (negocioDe(t, x) === neg) encolar(t, { ...x, _t: x._t || Date.now() }, false);
@@ -154,13 +228,37 @@ const Sync = (() => {
     return sincronizar();
   }
 
+  // Compartir solo algunos productos de un negocio (con sus ventas). Devuelve el código.
+  async function compartirGrupo(neg, ids, nombre, code) {
+    code = code || 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+    const lista = compartidos();
+    lista[code] = { ...(lista[code] || { desde: 1, personas: [] }), grupo: true, local: neg, nombre };
+    escribirJSON(CLAVE, lista);
+    meterEnCola(code, 'grupo', { id: code, _t: Date.now(), nombre }, false);
+    for (const it of (await DB.inventario()).filter(i => i.negocio === neg)) {
+      const dentro = ids.includes(it.id);
+      if (dentro && it.grupo !== code) { it.grupo = code; await DB.guardarInventario(it); }
+      if (!dentro && it.grupo === code) { delete it.grupo; await DB.ponerSinAviso('inventario', it); }
+    }
+    for (const m of (await DB.todos()).filter(x => x.negocio === neg && !x.grupo)) await encolar('movimientos', m, false);
+    await sincronizar();
+    return code;
+  }
+
   async function unirse(codigo) {
     const neg = String(codigo || '').trim();
     if (!/^[\w-]{3,60}$/.test(neg)) return 'Ese código no parece válido.';
     const lista = compartidos();
-    lista[neg] = lista[neg] || { desde: 1, personas: [] };
+    const grupo = /^g/.test(neg);
+    lista[neg] = lista[neg] || { desde: 1, personas: [], grupo, local: grupo ? '' : neg };
     escribirJSON(CLAVE, lista);
     await sincronizar();
+    if (grupo) {
+      const c = compartidos()[neg];
+      if (c && c.local) return '';
+      dejar(neg);
+      return ultimoError || ((await DB.negocios()).length >= 3 && c && c.nombre ? 'Ya tienes 3 negocios: borra uno para unirte.' : 'No encontré esos productos. Revisa el código.');
+    }
     if (!(await DB.uno('negocios', neg))) {
       const msg = ultimoError || 'No encontré ese negocio. Revisa el código (y que la otra persona ya lo haya compartido).';
       dejar(neg);
@@ -191,7 +289,7 @@ const Sync = (() => {
     const cola = leerJSON(COLA, []);
     caja.innerHTML = `
       ${negs.map(n => {
-        const c = lista[n.id];
+        const c = lista[n.id] && !lista[n.id].grupo ? lista[n.id] : null;
         const falta = cola.filter(x => x.negocio === n.id).length;
         return `<div class="comp-fila">
           <div class="comp-datos"><strong>${escapar(n.nombre)}</strong>
@@ -200,6 +298,16 @@ const Sync = (() => {
             : `<button type="button" data-compartir="${escapar(n.id)}">Compartir</button>`}
         </div>`;
       }).join('') || '<p class="nota">Todavía no tienes negocios.</p>'}
+      ${Object.entries(lista).filter(([, c]) => c.grupo).map(([code, c]) => {
+        const n = negs.find(x => x.id === c.local);
+        const falta = cola.filter(x => x.negocio === code).length;
+        return `<div class="comp-fila">
+          <div class="comp-datos"><strong>🏷️ ${escapar(c.nombre || 'Productos')}</strong>
+            <small>Solo esos productos${n ? `, dentro de «${escapar(n.nombre)}»` : ''} · 👥 ${escapar((c.personas || []).join(', ') || 'compartido')} · al día ${hace(c.ultima)}${falta ? ` · ${falta} por mandar` : ''}</small></div>
+          <button type="button" data-codigo="${escapar(code)}">Código</button><button type="button" data-dejar="${escapar(code)}">Dejar</button>
+        </div>`;
+      }).join('')}
+      <p class="nota">Para compartir solo algunos productos de un negocio: entra al negocio → 📦 Inventario → «👥 Compartir productos».</p>
       ${ultimoError ? `<p class="nota alerta">${escapar(ultimoError)}</p>` : ''}
       <div class="comp-acciones">
         <button type="button" id="comp-unirme">🔗 Unirme con código</button>
@@ -228,7 +336,8 @@ const Sync = (() => {
   }
 
   function mostrarCodigo(neg) {
-    const n = ((typeof estado === 'object' && estado.negocios) || []).find(x => x.id === neg);
+    const g = compartidos()[neg];
+    const n = g && g.grupo ? { nombre: g.nombre } : ((typeof estado === 'object' && estado.negocios) || []).find(x => x.id === neg);
     const d = $('comp-dialogo');
     $('comp-titulo').textContent = `Compartir «${n ? n.nombre : 'negocio'}»`;
     $('comp-cuerpo').innerHTML = `
@@ -246,7 +355,7 @@ const Sync = (() => {
   function pedirCodigo() {
     const d = $('comp-dialogo'), f = $('comp-form');
     $('comp-titulo').textContent = 'Unirme a un negocio';
-    $('comp-cuerpo').innerHTML = '<p class="nota">Pega el código que te pasaron. El negocio aparece arriba con todo lo anotado y desde ahí se van al día los dos teléfonos.</p>';
+    $('comp-cuerpo').innerHTML = '<p class="nota">Pega el código que te pasaron. El negocio (o los productos compartidos, en un negocio con su nombre) aparece arriba con todo lo anotado, y desde ahí se van al día los dos teléfonos.</p>';
     f.codigo.hidden = false;
     f.codigo.value = '';
     $('comp-copiar').hidden = true;
@@ -271,5 +380,44 @@ const Sync = (() => {
   setInterval(() => { if (!document.hidden && Object.keys(compartidos()).length) sincronizar(); }, 20000);
   setTimeout(() => sincronizar(), 2000);
 
-  return { sincronizar, compartir, unirse, dejar, pintarPanel, esCompartido, yo: () => yo, mezclarInventario };
+  // Ventana en Inventario: elegir qué productos compartir y con qué nombre.
+  async function abrirGrupo(neg) {
+    const items = (await DB.inventario()).filter(i => i.negocio === neg).sort((a, b) => a.nombre.localeCompare(b.nombre));
+    if (!items.length) { avisar('Primero agrega productos a este inventario'); return; }
+    const lista = compartidos();
+    const code = Object.keys(lista).find(k => lista[k].grupo && lista[k].local === neg);
+    const g = code ? lista[code] : null;
+    const $o = document.createElement('div');
+    $o.className = 'modal-overlay';
+    document.body.appendChild($o);
+    $o.innerHTML = `
+      <form class="modal inv-importar">
+        <h2>👥 Compartir productos</h2>
+        <p class="nota">Elige los productos que compartes (por ejemplo los emblemas con tu socio). La otra persona solo ve esos productos y las ventas que los nombran; el resto del negocio sigue siendo solo tuyo.</p>
+        <label>Nombre de lo que compartes<input name="nombre" maxlength="30" value="${escapar(g ? g.nombre : '')}" placeholder="Emblemas" required></label>
+        <div class="imp-lista">${items.map(i => `
+          <label class="imp-fila"><input type="checkbox" name="p" value="${escapar(i.id)}" ${(code ? i.grupo === code : /emblem/i.test(i.nombre)) ? 'checked' : ''}>
+            <span class="imp-datos"><strong>${escapar(i.nombre)}</strong><small>quedan ${escapar(Inventario.cuanto(i, i.stockActual))}</small></span></label>`).join('')}</div>
+        <div class="editor-botones">
+          <button type="button" value="no">Cancelar</button>
+          <button type="submit" class="principal">${code ? 'Guardar' : 'Compartir'}</button>
+        </div>
+      </form>`;
+    const f = $o.querySelector('form');
+    const ok = await new Promise(r => {
+      $o.querySelector('[value=no]').addEventListener('click', () => r(false));
+      f.addEventListener('submit', e => { e.preventDefault(); r(true); });
+    });
+    const ids = [...f.querySelectorAll('[name=p]:checked')].map(x => x.value);
+    const nombre = f.nombre.value.trim() || 'Productos';
+    $o.remove();
+    if (!ok) return;
+    if (!ids.length) { avisar('Marca al menos un producto'); return; }
+    avisar('Compartiendo…');
+    const nuevo = await compartirGrupo(neg, ids, nombre, code);
+    repintar();
+    mostrarCodigo(nuevo);
+  }
+
+  return { abrirGrupo, compartirGrupo, sincronizar, compartir, unirse, dejar, pintarPanel, esCompartido, yo: () => yo, mezclarInventario };
 })();

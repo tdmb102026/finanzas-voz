@@ -774,3 +774,6 @@ body.mes-pasado .mes-mini h1 { color: var(--acento); }
 .comp-acciones button { flex: 1; }
 .comp-codigo { font: 700 20px ui-monospace, monospace; text-align: center; padding: 12px; border: 2px dashed var(--acento); border-radius: 12px; user-select: all; word-break: break-all; }
 .mov-quien { color: var(--acento); font-weight: 600; }
+.inv-importar label.imp-fila { display: flex; margin: 0; }
+.inv-importar > label input { display: block; width: 100%; margin-top: 4px; padding: 10px; font-size: 16px; border: 1px solid var(--borde); border-radius: 10px; background: var(--fondo); color: var(--texto); }
+.modal.inv-importar .editor-botones button:not(.principal) { background: var(--superficie); color: var(--texto); border: 1px solid var(--borde); }
