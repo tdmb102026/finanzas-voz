@@ -319,6 +319,10 @@
       <label>Nombre
         <input name="nombre" autocomplete="off" maxlength="40">
       </label>
+      <label>Grupo (para ver su total aparte; vacío = automático)
+        <input name="grupo" autocomplete="off" maxlength="30" list="inv-grupos-lista">
+        <datalist id="inv-grupos-lista"></datalist>
+      </label>
       <label>¿Se vende por partes? Cada uno trae (1 = no)
         <input name="partes" type="number" inputmode="numeric" min="1" max="100" step="1">
       </label>

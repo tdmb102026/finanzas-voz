@@ -779,3 +779,8 @@ body.mes-pasado .mes-mini h1 { color: var(--acento); }
 .modal.inv-importar .editor-botones button:not(.principal) { background: var(--superficie); color: var(--texto); border: 1px solid var(--borde); }
 #vista-anotar { position: relative; }
 .version-esquina { position: absolute; top: 1px; right: 10px; color: var(--suave); font-size: 10px; opacity: .7; pointer-events: none; }
+.inv-grupos { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 10px; }
+.inv-grupo { flex-shrink: 0; border: 1px solid var(--borde); background: var(--superficie); color: var(--texto); border-radius: 999px; padding: 6px 14px; font-weight: 600; font-size: 14px; }
+.inv-grupo small { color: var(--suave); font-weight: 500; margin-left: 2px; }
+.inv-grupo.activo { background: var(--acento); border-color: var(--acento); color: #fff; }
+.inv-grupo.activo small { color: rgba(255,255,255,.85); }

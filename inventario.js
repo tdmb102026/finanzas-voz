@@ -69,19 +69,38 @@ const Inventario = (() => {
 
   async function pintar(negocio, padre = 'inventario') {
     await sincronizar(negocio);
-    const items = await porNegocio(negocio);
+    const todos = await porNegocio(negocio);
     const $div = $(padre);
     if (!$div) {
       return;
     }
     $div.innerHTML = '';
 
-    if (!items.length) {
+    if (!todos.length) {
       $div.innerHTML = '<p style="text-align: center; color: var(--suave);">Sin productos. Agregar uno arriba.</p>';
       return;
     }
 
-    // Resumen de todo el inventario arriba.
+    // Grupos de productos (fer, 2026-11-25): "RC", "Emblemas"… Arriba se elige cuál ver; el resumen suma solo ese.
+    const grupos = gruposDe(todos);
+    const nombresGrupo = [...new Set(todos.map(x => grupos[x.id]))].sort((a, b) => (a === 'Otros') - (b === 'Otros') || a.localeCompare(b));
+    const claveFiltro = 'inv-grupo-' + negocio;
+    let filtro = localStorage.getItem(claveFiltro) || '';
+    if (!nombresGrupo.includes(filtro)) filtro = '';
+    const items = filtro ? todos.filter(x => grupos[x.id] === filtro) : todos;
+    if (nombresGrupo.length > 1) {
+      const $g = document.createElement('div');
+      $g.className = 'inv-grupos';
+      const chip = (g, n) => `<button type="button" class="inv-grupo${g === filtro ? ' activo' : ''}" data-grupo="${escapar(g)}">${g ? escapar(g) : 'Todos'} <small>${n}</small></button>`;
+      $g.innerHTML = chip('', todos.length) + nombresGrupo.map(g => chip(g, todos.filter(x => grupos[x.id] === g).length)).join('');
+      $g.querySelectorAll('[data-grupo]').forEach(b => b.addEventListener('click', () => {
+        localStorage.setItem(claveFiltro, b.dataset.grupo);
+        pintar(negocio, padre);
+      }));
+      $div.appendChild($g);
+    }
+
+    // Resumen de lo que se está viendo (todo o un grupo).
     const mes = fechaLocal().slice(0, 7);
     const vendidas = item => item.historial.filter(h => h.tipo === 'venta' && String(h.fecha).startsWith(mes))
       .reduce((a, h) => a + h.cantidad, 0);
@@ -91,13 +110,13 @@ const Inventario = (() => {
     const bajos = items.filter(x => x.stockActual <= x.stockMinimo);
     // Plata por producto: ventas menos gastos (envíos, etc.) que nombran el producto. Un combo se reparte por unidades.
     const plata = {};
-    for (const x of items) plata[x.id] = { ventas: 0, gastos: 0, ventasMes: 0, gastosMes: 0 };
+    for (const x of todos) plata[x.id] = { ventas: 0, gastos: 0, ventasMes: 0, gastosMes: 0 };
     const todosMovs = await DB.todos();
     const porFrase = ventasPorFrase(todosMovs.filter(m => (m.negocio || '') === negocio));
     for (const m of todosMovs) {
       if ((m.negocio || '') !== negocio || m.estado === 'pendiente' || (m.tipo !== 'ingreso' && m.tipo !== 'gasto')) continue;
       const dia = String(m.fecha).slice(0, 10);
-      const ps = productosDe(m, items, (porFrase[m.frase] || 0) <= 1).filter(p => dia >= (p.item.desde || DESDE_ANTIGUO) && !ignorado(p.item, m.id));
+      const ps = productosDe(m, todos, (porFrase[m.frase] || 0) <= 1).filter(p => dia >= (p.item.desde || DESDE_ANTIGUO) && !ignorado(p.item, m.id));
       const unidades = ps.reduce((a, p) => a + p.cantidad, 0);
       for (const p of ps) {
         const parte = Math.round((m.monto || 0) * p.cantidad / unidades);
@@ -229,13 +248,13 @@ const Inventario = (() => {
       ${lista.map(c => `
         <button type="button" class="inv-combo" data-combo="${escapar(c.id)}">
           <strong>${escapar(c.nombre)}</strong>
-          <small>${items.filter(i => c.partes[i.id] > 0).map(i => `${c.partes[i.id]} ${escapar(i.nombre)}`).join(' + ') || 'sin productos'}</small>
+          <small>${todos.filter(i => c.partes[i.id] > 0).map(i => `${c.partes[i.id]} ${escapar(i.nombre)}`).join(' + ') || 'sin productos'}</small>
           ${c.frases ? `<small>🎙️ «${escapar(c.frases)}»</small>` : ''}
         </button>`).join('')}
       <button type="button" class="inv-nuevo-combo">+ Nuevo combo</button>`;
     $div.appendChild($combos);
-    $combos.querySelectorAll('[data-combo]').forEach(b => b.addEventListener('click', () => editarCombo(negocio, items, lista.find(c => c.id === b.dataset.combo))));
-    $combos.querySelector('.inv-nuevo-combo').addEventListener('click', () => editarCombo(negocio, items, null));
+    $combos.querySelectorAll('[data-combo]').forEach(b => b.addEventListener('click', () => editarCombo(negocio, todos, lista.find(c => c.id === b.dataset.combo))));
+    $combos.querySelector('.inv-nuevo-combo').addEventListener('click', () => editarCombo(negocio, todos, null));
     $div.querySelectorAll('.inv-editar').forEach(b => b.addEventListener('click', () => editarProducto(items.find(i => i.id === b.dataset.id))));
     $div.querySelectorAll('.inv-borrar').forEach(b => b.addEventListener('click', () => borrarProducto(items.find(i => i.id === b.dataset.id))));
 
@@ -535,6 +554,29 @@ const Inventario = (() => {
     return r;
   }
 
+  // Grupo de cada producto: el que fer le puso (`grupo_nombre`) o uno automático por la palabra que comparte
+  // con otros al principio o al final del nombre ("Emblema Japón" → Emblemas, "Bulldozer RC" → RC).
+  function gruposDe(items) {
+    const pal = x => String(x.nombre || '').trim().split(/\s+/).filter(Boolean);
+    const norm = w => w.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const cuenta = (f) => {
+      const c = {};
+      for (const x of items) { const p = pal(x); if (p.length > 1) { const w = norm(f(p)); c[w] = (c[w] || 0) + 1; } }
+      return c;
+    };
+    const primeras = cuenta(p => p[0]), ultimas = cuenta(p => p[p.length - 1]);
+    const bonito = w => /[aeiouáéíóú]$/i.test(w) && w.length > 3 ? w[0].toUpperCase() + w.slice(1) + 's' : (w.length <= 3 ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1));
+    const r = {};
+    for (const x of items) {
+      const p = pal(x);
+      if (x.grupo_nombre) r[x.id] = x.grupo_nombre;
+      else if (p.length > 1 && primeras[norm(p[0])] > 1) r[x.id] = bonito(p[0]);
+      else if (p.length > 1 && ultimas[norm(p[p.length - 1])] > 1) r[x.id] = bonito(p[p.length - 1]);
+      else r[x.id] = 'Otros';
+    }
+    return r;
+  }
+
   function editarProducto(item) {
     const d = $('inv-editar'), f = $('inv-editar-form');
     f.nombre.value = item.nombre;
@@ -544,6 +586,12 @@ const Inventario = (() => {
     f.partes.value = p0;
     f.unidad.value = item.unidad || '';
     f.parte.value = item.parte || '';
+    f.grupo.value = item.grupo_nombre || '';
+    porNegocio(item.negocio || '').then(todos => {
+      const g = gruposDe(todos);
+      $('inv-grupos-lista').innerHTML = [...new Set(Object.values(g))].filter(x => x !== 'Otros').map(x => `<option value="${escapar(x)}">`).join('');
+      f.grupo.placeholder = `Automático: ${g[item.id] || 'Otros'}`;
+    });
     const verPartes = () => { $('inv-editar-partes').hidden = (parseInt(f.partes.value, 10) || 1) < 2; };
     f.partes.oninput = verPartes;
     verPartes();
@@ -564,6 +612,7 @@ const Inventario = (() => {
         x.partes = pn;
         x.unidad = f.unidad.value.trim();
         x.parte = f.parte.value.trim();
+        x.grupo_nombre = f.grupo.value.trim();
         const inicial = Math.max(0, Math.round((parseFloat(f.inicial.value) || 0) * pn));
         x.stockActual += inicial - x.stockInicial;
         x.stockInicial = inicial;
