@@ -784,3 +784,5 @@ body.mes-pasado .mes-mini h1 { color: var(--acento); }
 .inv-grupo small { color: var(--suave); font-weight: 500; margin-left: 2px; }
 .inv-grupo.activo { background: var(--acento); border-color: var(--acento); color: #fff; }
 .inv-grupo.activo small { color: rgba(255,255,255,.85); }
+.inv-grupo-nuevo { border-style: dashed; border-color: var(--acento); color: var(--acento); background: none; }
+.inv-grupo-editar { background: none; color: var(--acento); }

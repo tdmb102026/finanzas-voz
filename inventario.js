@@ -88,11 +88,16 @@ const Inventario = (() => {
     let filtro = localStorage.getItem(claveFiltro) || '';
     if (!nombresGrupo.includes(filtro)) filtro = '';
     const items = filtro ? todos.filter(x => grupos[x.id] === filtro) : todos;
-    if (nombresGrupo.length > 1) {
+    {
       const $g = document.createElement('div');
       $g.className = 'inv-grupos';
       const chip = (g, n) => `<button type="button" class="inv-grupo${g === filtro ? ' activo' : ''}" data-grupo="${escapar(g)}">${g ? escapar(g) : 'Todos'} <small>${n}</small></button>`;
-      $g.innerHTML = chip('', todos.length) + nombresGrupo.map(g => chip(g, todos.filter(x => grupos[x.id] === g).length)).join('');
+      $g.innerHTML = (nombresGrupo.length > 1 ? chip('', todos.length) + nombresGrupo.map(g => chip(g, todos.filter(x => grupos[x.id] === g).length)).join('') : '')
+        + (filtro ? `<button type="button" class="inv-grupo inv-grupo-editar" data-editar="${escapar(filtro)}">✏️ Editar grupo</button>` : '')
+        + '<button type="button" class="inv-grupo inv-grupo-nuevo">＋ Grupo</button>';
+      $g.querySelector('.inv-grupo-nuevo').addEventListener('click', () => editarGrupo(negocio, todos, grupos, ''));
+      const $ed = $g.querySelector('.inv-grupo-editar');
+      if ($ed) $ed.addEventListener('click', () => editarGrupo(negocio, todos, grupos, filtro));
       $g.querySelectorAll('[data-grupo]').forEach(b => b.addEventListener('click', () => {
         localStorage.setItem(claveFiltro, b.dataset.grupo);
         pintar(negocio, padre);
@@ -229,7 +234,7 @@ const Inventario = (() => {
             <button type="button" class="inv-hist" data-id="${escapar(item.id)}">Historial</button>
           </div>
           <div class="inv-editar-fila">
-            <button type="button" class="inv-editar" data-id="${escapar(item.id)}">✏️ Editar stock inicial</button>
+            <button type="button" class="inv-editar" data-id="${escapar(item.id)}">✏️ Editar (grupo, nombre, stock)</button>
             <button type="button" class="inv-borrar" data-id="${escapar(item.id)}">🗑️ Borrar producto</button>
           </div>
         </div>
@@ -575,6 +580,57 @@ const Inventario = (() => {
       else r[x.id] = 'Otros';
     }
     return r;
+  }
+
+  // Crear o editar un grupo a mano (fer, 2026-11-25): nombre y qué productos van. Los marcados quedan con
+  // `grupo_nombre`; los que se desmarcan vuelven a su grupo automático (u "Otros" si ese era este mismo).
+  async function editarGrupo(negocio, todos, grupos, actual) {
+    const $o = document.createElement('div');
+    $o.className = 'modal-overlay';
+    document.body.appendChild($o);
+    const orden = [...todos].sort((a, b) => a.nombre.localeCompare(b.nombre));
+    $o.innerHTML = `
+      <form class="modal inv-importar">
+        <h2>${actual ? '✏️ Editar grupo' : '＋ Nuevo grupo'}</h2>
+        <p class="nota">Ponle nombre y marca los productos que van juntos. Arriba del inventario podrás ver el total solo de ese grupo.</p>
+        <label>Nombre del grupo<input name="nombre" maxlength="30" value="${escapar(actual)}" placeholder="Juguetes RC" required></label>
+        <div class="imp-lista">${orden.map(i => `
+          <label class="imp-fila"><input type="checkbox" name="p" value="${escapar(i.id)}" ${actual && grupos[i.id] === actual ? 'checked' : ''}>
+            <span class="imp-datos"><strong>${escapar(i.nombre)}</strong><small>ahora en: ${escapar(grupos[i.id])}</small></span></label>`).join('')}</div>
+        <div class="editor-botones">
+          <button type="button" value="no">Cancelar</button>
+          <button type="submit" class="principal">Guardar</button>
+        </div>
+      </form>`;
+    const f = $o.querySelector('form');
+    f.nombre.focus();
+    const ok = await new Promise(r => {
+      $o.querySelector('[value=no]').addEventListener('click', () => r(false));
+      f.addEventListener('submit', e => { e.preventDefault(); r(true); });
+    });
+    const ids = new Set([...f.querySelectorAll('[name=p]:checked')].map(x => x.value));
+    const nombre = f.nombre.value.trim();
+    $o.remove();
+    if (!ok) return;
+    if (!nombre) { avisar('Ponle un nombre al grupo'); return; }
+    if (!ids.size) { avisar('Marca al menos un producto'); return; }
+    const r = cola.then(async () => {
+      const lista = await porNegocio(negocio);
+      const antes = gruposDe(lista);
+      const cambia = [];
+      for (const x of lista) {
+        if (ids.has(x.id)) { if (x.grupo_nombre !== nombre) { x.grupo_nombre = nombre; cambia.push(x); } }
+        else if (antes[x.id] === actual && actual) { x.grupo_nombre = ''; cambia.push(x); }
+      }
+      // Los que salieron y solos volverían a este mismo grupo pasan a "Otros".
+      const despues = gruposDe(lista);
+      for (const x of cambia) if (!ids.has(x.id) && despues[x.id] === nombre) x.grupo_nombre = 'Otros';
+      for (const x of cambia) await DB.guardarInventario(x);
+      localStorage.setItem('inv-grupo-' + negocio, nombre);
+      avisar(`Grupo «${nombre}»: ${ids.size} producto${ids.size === 1 ? '' : 's'}`);
+      repintar();
+    });
+    cola = r.catch(() => {});
   }
 
   function editarProducto(item) {
